@@ -29,10 +29,35 @@ const getRussianSport = (sport) => {
   return 'СПОРТ';
 };
 
+const formatMoscowTime = (dateStr) => {
+  if (!dateStr) return { day: '', time: '' };
+  try {
+    let cleanStr = String(dateStr);
+    if (!cleanStr.includes('Z') && !cleanStr.includes('+') && !cleanStr.slice(10).includes('-')) {
+      cleanStr = `${cleanStr}+03:00`;
+    }
+    const d = new Date(cleanStr);
+    const day = d.toLocaleDateString('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      month: 'short',
+      day: 'numeric'
+    });
+    const time = d.toLocaleTimeString('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return { day, time };
+  } catch (e) {
+    return { day: '', time: '' };
+  }
+};
+
 const MatchDetailModal = ({ bet, onClose }) => {
   if (!bet) return null;
 
   const [activeTab, setActiveTab] = useState('sources'); // 'sources', 'tactics', 'ai'
+  const mskTime = formatMoscowTime(bet.match_date);
 
   const [homeTeam, awayTeam] = bet.match_name.includes(' vs ')
     ? bet.match_name.split(' vs ')
@@ -94,10 +119,13 @@ const MatchDetailModal = ({ bet, onClose }) => {
             <div className="flex flex-col items-center justify-center px-2">
               <div className="px-3.5 py-1.5 bg-gray-800/90 rounded-2xl border border-gray-700 text-center mb-1 shadow-inner">
                 <span className="text-[11px] text-gray-400 block font-semibold">
-                  {new Date(bet.match_date).toLocaleString([], {month: 'short', day: 'numeric'})}
+                  {mskTime.day}
                 </span>
                 <span className="text-lg font-black text-white">
-                  {new Date(bet.match_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  {mskTime.time}
+                </span>
+                <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest block mt-0.5">
+                  МСК
                 </span>
               </div>
               <span className="text-xs font-black text-gray-500 italic">VS</span>

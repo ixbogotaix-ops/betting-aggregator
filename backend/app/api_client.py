@@ -69,9 +69,18 @@ class SportsAPIClient:
                     
                 data = response.json()
                 
+                from datetime import timezone, timedelta
+                moscow_tz = timezone(timedelta(hours=3))
+                now_moscow = datetime.now(moscow_tz).replace(tzinfo=None)
+
                 for item in data:
                     match_time = dateutil.parser.isoparse(item["commence_time"])
-                    if (match_time.replace(tzinfo=None) - datetime.utcnow()).days > 7:
+                    if match_time.tzinfo is not None:
+                        match_time_msk = match_time.astimezone(moscow_tz).replace(tzinfo=None)
+                    else:
+                        match_time_msk = match_time + timedelta(hours=3)
+
+                    if (match_time_msk - now_moscow).days > 7:
                         continue
                     
                     favored_outcome = None
@@ -91,7 +100,7 @@ class SportsAPIClient:
                         "league": item["sport_key"],
                         "home": item["home_team"],
                         "away": item["away_team"],
-                        "time": match_time.replace(tzinfo=None),
+                        "time": match_time_msk,
                         "favored_outcome": favored_outcome,
                         "best_odds": best_odds
                     })

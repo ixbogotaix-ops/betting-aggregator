@@ -26,6 +26,30 @@ const getRussianSport = (sport) => {
   return 'СПОРТ';
 };
 
+const formatMoscowTime = (dateStr) => {
+  if (!dateStr) return { day: '', time: '' };
+  try {
+    let cleanStr = String(dateStr);
+    if (!cleanStr.includes('Z') && !cleanStr.includes('+') && !cleanStr.slice(10).includes('-')) {
+      cleanStr = `${cleanStr}+03:00`;
+    }
+    const d = new Date(cleanStr);
+    const day = d.toLocaleDateString('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      month: 'long',
+      day: 'numeric'
+    });
+    const time = d.toLocaleTimeString('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return { day, time };
+  } catch (e) {
+    return { day: '', time: '' };
+  }
+};
+
 const TopBetCard = ({ bet }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -52,6 +76,7 @@ const TopBetCard = ({ bet }) => {
     `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=random&color=fff&size=64&bold=true&rounded=true`;
 
   const totalCappersCount = bet.all_predictions?.length || bet.supporting_sources?.length || 0;
+  const mskTime = formatMoscowTime(bet.match_date);
 
   return (
     <>
@@ -74,14 +99,17 @@ const TopBetCard = ({ bet }) => {
             )}
           </div>
 
-          {/* Дата и время */}
+          {/* Дата и время (Москва) */}
           {bet.match_date && (
-            <div className="flex flex-col items-center bg-gray-900/80 px-4 py-2 rounded-xl border border-gray-700 shadow-inner">
+            <div className="flex flex-col items-center bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-700 shadow-inner">
               <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5 whitespace-nowrap">
-                {new Date(bet.match_date).toLocaleString([], {month: 'long', day: 'numeric'})}
+                {mskTime.day}
               </span>
               <span className="text-xl font-black text-white leading-none">
-                {new Date(bet.match_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                {mskTime.time}
+              </span>
+              <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest mt-0.5">
+                МСК
               </span>
             </div>
           )}

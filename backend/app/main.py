@@ -25,18 +25,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    from sqlalchemy import text
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        for col_sql in [
-            "ALTER TABLE predictions ADD COLUMN reasoning TEXT",
-            "ALTER TABLE matches ADD COLUMN tactical_analysis TEXT",
-            "ALTER TABLE matches ADD COLUMN key_factors TEXT"
-        ]:
-            try:
-                await conn.execute(text(col_sql))
-            except Exception:
-                pass
+    from .database import init_db
+    await init_db()
     
     # Запуск фонового планировщика
     from .scheduler import start_scheduler

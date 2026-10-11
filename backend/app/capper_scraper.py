@@ -90,6 +90,9 @@ async def process_capper_predictions():
                 )
                 session.add(match)
                 await session.flush()
+            else:
+                # Обновляем время матча до точного московского времени
+                match.match_date = m["time"]
                 
             # Если API вернул кэфы, сохраняем их как прогноз букмекера
             if m.get("favored_outcome") and m.get("best_odds"):
