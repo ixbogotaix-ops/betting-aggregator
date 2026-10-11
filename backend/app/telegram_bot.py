@@ -65,7 +65,8 @@ async def notify_daily_top_bets(top_bets_data: list):
     if len(other_bets) > 5:
         message_lines.append(f"_(И еще {len(other_bets) - 5} матчей...)_")
     
-    message_lines.append("\n👉 _Открой веб-интерфейс AI Sports Aggregator для подробностей!_")
+    site_url = os.getenv("SITE_URL", "http://45.84.222.76")
+    message_lines.append(f"\n👉 _Все матчи и подробная аналитика:_\n🌐 [AI Sports Aggregator]({site_url}) — {site_url}")
     
     final_text = "\n".join(message_lines)
     if len(final_text) > 4000:
