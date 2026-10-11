@@ -26,7 +26,12 @@ async def generate_daily_parlays(session: AsyncSession) -> Dict:
         return {"safe_parlay": None, "hot_parlay": None}
 
     # Исключаем дубликаты команд и матчей
-    valid_bets = [b for b in top_bets if b.average_odds >= 1.25 and b.confidence_score >= 45]
+    valid_bets = [b for b in top_bets if b.average_odds >= 1.20]
+    if len(valid_bets) < 2:
+        valid_bets = top_bets
+
+    if len(valid_bets) < 2:
+        return {"safe_parlay": None, "hot_parlay": None}
 
     def build_parlay_item(bet):
         return {
@@ -44,15 +49,14 @@ async def generate_daily_parlays(session: AsyncSession) -> Dict:
             "away_logo": bet.away_logo
         }
 
-    # 1. Формируем "Надёжный экспресс" (2-3 события с наивысшей уверенностью, кэф 1.30-1.70)
+    # 1. Формируем "Надёжный экспресс" (2-3 события с наивысшей уверенностью и разумным кэфом)
     safe_candidates = sorted(
-        [b for b in valid_bets if 1.25 <= b.average_odds <= 1.85 and b.confidence_score >= 60],
-        key=lambda x: x.confidence_score,
+        [b for b in valid_bets if 1.20 <= b.average_odds <= 1.95],
+        key=lambda x: (x.confidence_score, -x.average_odds),
         reverse=True
     )
-    # Если кандидатов мало, берем любые с наибольшей уверенностью
     if len(safe_candidates) < 2:
-        safe_candidates = sorted(valid_bets, key=lambda x: x.confidence_score, reverse=True)
+        safe_candidates = sorted(valid_bets, key=lambda x: (x.confidence_score, -x.average_odds), reverse=True)
 
     safe_selected = []
     seen_matches = set()
@@ -60,7 +64,6 @@ async def generate_daily_parlays(session: AsyncSession) -> Dict:
         if b.match_id not in seen_matches and len(safe_selected) < 3:
             safe_selected.append(b)
             seen_matches.add(b.match_id)
-            # Если уже набрали 2 матча и общий кэф перевалил за 2.0, можно остановиться
             curr_odds = 1.0
             for item in safe_selected:
                 curr_odds *= item.average_odds
@@ -83,14 +86,14 @@ async def generate_daily_parlays(session: AsyncSession) -> Dict:
             "items": [build_parlay_item(b) for b in safe_selected]
         }
 
-    # 2. Формируем "Огненный экспресс" (3-4 события с коэффициентами 1.50 - 2.15, кэф 4.50+)
+    # 2. Формируем "Огненный экспресс" (3-4 события с коэффициентами выше)
     hot_candidates = sorted(
-        [b for b in valid_bets if 1.45 <= b.average_odds <= 2.30],
-        key=lambda x: (x.confidence_score, x.average_odds),
+        [b for b in valid_bets if b.average_odds >= 1.45],
+        key=lambda x: (x.average_odds, x.confidence_score),
         reverse=True
     )
-    if len(hot_candidates) < 3:
-        hot_candidates = valid_bets
+    if len(hot_candidates) < 2:
+        hot_candidates = sorted(valid_bets, key=lambda x: (x.average_odds, x.confidence_score), reverse=True)
 
     hot_selected = []
     seen_hot = set()
@@ -101,7 +104,7 @@ async def generate_daily_parlays(session: AsyncSession) -> Dict:
             curr_odds = 1.0
             for item in hot_selected:
                 curr_odds *= item.average_odds
-            if len(hot_selected) >= 3 and curr_odds >= 4.0:
+            if len(hot_selected) >= 3 and curr_odds >= 4.5:
                 break
 
     hot_parlay = None
