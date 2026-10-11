@@ -5,7 +5,7 @@ from datetime import datetime, timezone, time, timedelta
 from typing import List, Dict
 
 from app.models import Match, Prediction
-from app.schemas import TopBetResponse
+from app.schemas import TopBetResponse, TopBetPredictionDetail
 
 def normalize_outcome(outcome: str) -> str:
     """Приводит разные форматы исходов от разных парсеров к единому стандарту для консенсуса"""
@@ -133,6 +133,21 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 best_avg_odds = avg_odds
                 best_sources = supporting_sources
 
+        # Собираем подробный список всех мнений капперов по этому матчу
+        detailed_preds = []
+        for p in match.predictions:
+            s_name = p.source.name if p.source else "Эксперт"
+            s_type = p.source.source_type.value if (p.source and hasattr(p.source.source_type, 'value')) else (str(p.source.source_type) if p.source else "site")
+            s_weight = round(p.source.weight, 1) if (p.source and p.source.weight) else 1.0
+            detailed_preds.append(TopBetPredictionDetail(
+                source_name=s_name,
+                source_type=s_type,
+                predicted_outcome=p.predicted_outcome,
+                odds=round(p.odds, 2),
+                confidence_score=p.confidence_score,
+                source_weight=s_weight
+            ))
+
         # Выводим в топ, только если скор больше 5.0 (чтобы покрывать даже одиночные уверенные прогнозы)
         if best_score >= 5.0:
             top_bets.append(TopBetResponse(
@@ -147,7 +162,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 supporting_sources=best_sources,
                 is_bet_of_the_day=match.is_bet_of_the_day or False,
                 ai_insight=match.ai_insight,
-                cappers_reasoning=match.cappers_reasoning
+                cappers_reasoning=match.cappers_reasoning,
+                all_predictions=detailed_preds
             ))
 
     # Сортируем от самых уверенных ставок к менее уверенным

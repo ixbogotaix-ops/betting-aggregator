@@ -73,6 +73,14 @@ class MatchResponse(MatchBase):
     class Config:
         from_attributes = True
 
+class TopBetPredictionDetail(BaseModel):
+    source_name: str
+    source_type: str
+    predicted_outcome: str
+    odds: float
+    confidence_score: Optional[float] = None
+    source_weight: Optional[float] = 1.0
+
 # --- Consensus Schemas ---
 class TopBetResponse(BaseModel):
     match_id: int
@@ -87,6 +95,7 @@ class TopBetResponse(BaseModel):
     is_bet_of_the_day: bool = False
     ai_insight: Optional[str] = None
     cappers_reasoning: Optional[str] = None
+    all_predictions: List[TopBetPredictionDetail] = []
   
 class SourceStatusResponse(BaseModel):  
     id: int  
