@@ -37,6 +37,13 @@ async def init_db():
             if not v_res.scalar_one_or_none():
                 await conn.execute(text("UPDATE matches SET match_date = datetime(match_date, '+3 hours')"))
                 await conn.execute(text("INSERT INTO schema_version (version) VALUES (1)"))
+            
+            # Одноразовая миграция v2: очистка суффиксов источников в базе
+            v_res2 = await conn.execute(text("SELECT version FROM schema_version WHERE version = 2"))
+            if not v_res2.scalar_one_or_none():
+                for sfx in [' (Stavka TV)', ' (Legalbet)', ' (Vprognoze)', ' (BR)']:
+                    await conn.execute(text(f"UPDATE predictions SET predicted_outcome = REPLACE(predicted_outcome, '{sfx}', '') WHERE predicted_outcome LIKE '%{sfx}%'"))
+                await conn.execute(text("INSERT INTO schema_version (version) VALUES (2)"))
         except Exception:
             pass
 

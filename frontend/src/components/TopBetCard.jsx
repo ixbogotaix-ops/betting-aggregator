@@ -2,17 +2,112 @@ import React, { useState } from 'react';
 import { Target, TrendingUp, Users, Shield, Sparkles, ChevronRight, Info } from 'lucide-react';
 import MatchDetailModal from './MatchDetailModal';
 
-const formatOutcome = (outcome) => {
-  const map = {
-    'home_win': 'Победа Хозяев (П1)',
-    'away_win': 'Победа Гостей (П2)',
-    'draw': 'Ничья (Х)',
-    'total_over_2.5': 'Тотал Больше 2.5'
-  };
+const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
+  if (!outcome) return '';
   
-  if (map[outcome]) return map[outcome];
-  if (outcome.includes(' ') || outcome.includes('(')) return outcome;
-  return outcome.replace(/_/g, ' ').toUpperCase();
+  // Очищаем от суффиксов источников в скобках
+  let clean = outcome.replace(/\s*\((?:stavka tv|legalbet|vprognoze|br|betting|tg|statarea|pinnacle)\b.*?\)/gi, '').trim().replace(/\.$/, '').trim();
+  const low = clean.toLowerCase();
+  
+  const cleanMatch = (str, target) => {
+    if (!str || !target) return false;
+    const s = str.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    const t = target.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    return s.includes(t) || t.includes(s);
+  };
+
+  // 1. Обе забьют (ОЗ)
+  if (low.includes('оз') || low.includes('обе забьют')) {
+    if (low.includes('нет') || low.includes('no') || low.includes('не забьют') || low.includes('— нет') || low.includes('- нет')) {
+      return 'Обе забьют — Нет (ОЗ: Нет)';
+    }
+    return 'Обе забьют — Да (ОЗ: Да)';
+  }
+
+  // 2. Двойной шанс
+  if (/\b(1x|1х)\b/i.test(low) || (low.includes('не проиграет') && (low.includes('1') || low.includes('хозя') || cleanMatch(low, homeTeam)))) {
+    return homeTeam ? `${homeTeam} не проиграет (1X)` : '1X (Хозяева не проиграют)';
+  }
+  if (/\b(x2|х2)\b/i.test(low) || (low.includes('не проиграет') && (low.includes('2') || low.includes('гост') || cleanMatch(low, awayTeam)))) {
+    return awayTeam ? `${awayTeam} не проиграет (X2)` : 'X2 (Гости не проиграют)';
+  }
+  if (low === '12' || low.includes('победа 1 или 2')) {
+    return 'Победа 1 или 2 (12)';
+  }
+
+  // 3. Ничья
+  if (['draw', 'x', 'х', 'ничья', 'х.', 'x.'].includes(low) || low.startsWith('ничья')) {
+    return 'Ничья (Х)';
+  }
+
+  // 4. Тоталы
+  const tb = low.match(/(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?/i);
+  if (tb) {
+    const v = tb[1].replace(',', '.');
+    return `Тотал Больше ${v} (ТБ ${v})`;
+  }
+  const tm = low.match(/(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?/i);
+  if (tm) {
+    const v = tm[1].replace(',', '.');
+    return `Тотал Меньше ${v} (ТМ ${v})`;
+  }
+
+  // 5. Форы
+  const f1 = low.match(/(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
+  if (f1) {
+    const v = f1[1].replace(',', '.');
+    return homeTeam ? `Фора ${homeTeam} (${v}) (Ф1)` : `Фора 1 (${v})`;
+  }
+  const f2 = low.match(/(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
+  if (f2) {
+    const v = f2[1].replace(',', '.');
+    return awayTeam ? `Фора ${awayTeam} (${v}) (Ф2)` : `Фора 2 (${v})`;
+  }
+
+  // 6. Победа 2 / Гости (П2)
+  if (
+    ['away_win', 'п2', 'w2', '2', 'победа 2', 'победа2', 'победа гостей', 'победа второй команды'].includes(low) ||
+    low.startsWith('победа 2') ||
+    low.endsWith('п2') ||
+    low.includes('победа второй') ||
+    low.includes('победа гостей')
+  ) {
+    return awayTeam ? `Победа ${awayTeam} (П2)` : 'Победа Гостей (П2)';
+  }
+
+  // 7. Победа 1 / Хозяева (П1)
+  if (
+    ['home_win', 'п1', 'w1', '1', 'победа 1', 'победа1', 'победа хозяев', 'победа первой команды'].includes(low) ||
+    low.startsWith('победа 1') ||
+    low.endsWith('п1') ||
+    low.includes('победа первой') ||
+    low.includes('победа хозяев')
+  ) {
+    return homeTeam ? `Победа ${homeTeam} (П1)` : 'Победа Хозяев (П1)';
+  }
+
+  // 8. Победа: Название команды
+  if (low.startsWith('победа:') || low.startsWith('победа ')) {
+    const teamPart = low.includes(':') ? low.split(':')[1].trim() : low.replace('победа', '').trim();
+    if (awayTeam && cleanMatch(teamPart, awayTeam)) {
+      return `Победа ${awayTeam} (П2)`;
+    }
+    if (homeTeam && cleanMatch(teamPart, homeTeam)) {
+      return `Победа ${homeTeam} (П1)`;
+    }
+    if (teamPart) {
+      return `Победа ${teamPart}`;
+    }
+  }
+
+  if (awayTeam && cleanMatch(low, awayTeam)) {
+    return `Победа ${awayTeam} (П2)`;
+  }
+  if (homeTeam && cleanMatch(low, homeTeam)) {
+    return `Победа ${homeTeam} (П1)`;
+  }
+
+  return clean;
 };
 
 const getRussianSport = (sport) => {
@@ -189,7 +284,7 @@ const TopBetCard = ({ bet }) => {
             </div>
             <div>
               <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-1">Исход</p>
-              <p className="font-extrabold text-white text-base leading-tight">{formatOutcome(bet.recommended_outcome)}</p>
+              <p className="font-extrabold text-white text-base leading-tight">{formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}</p>
             </div>
           </div>
           

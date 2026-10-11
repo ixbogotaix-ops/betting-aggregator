@@ -3,6 +3,9 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, time, timedelta
 from typing import List, Dict
+import re
+from thefuzz import fuzz
+from unidecode import unidecode
 
 from app.models import Match, Prediction
 from app.schemas import TopBetResponse, TopBetPredictionDetail
@@ -17,26 +20,116 @@ from app.analytics_engine import (
 from app.logo_service import get_team_logo, get_league_country
 
 def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") -> str:
-    """Приводит разные форматы исходов от разных парсеров к единому стандарту для консенсуса"""
-    out = outcome.lower()
-    if out == "home_win" or "п1" in out or "победа хозяев" in out:
-        return f"Победа Хозяев ({home_team})" if home_team else "Победа Хозяев (П1)"
-    elif out == "away_win" or "п2" in out or "победа гостей" in out:
-        return f"Победа Гостей ({away_team})" if away_team else "Победа Гостей (П2)"
-    elif out == "draw" or "ничья" in out or " х " in out:
+    """
+    Приводит исходы любых источников к абсолютно единому стандарту спортивного беттинга:
+    - Победа [Команда] (П1)
+    - Победа [Команда] (П2)
+    - Ничья (Х)
+    - [Команда] не проиграет (1X)
+    - [Команда] не проиграет (X2)
+    - Победа 1 или 2 (12)
+    - Обе забьют — Да (ОЗ: Да)
+    - Обе забьют — Нет (ОЗ: Нет)
+    - Тотал Больше X (ТБ X)
+    - Тотал Меньше X (ТМ X)
+    - Фора [Команда] (X)
+    """
+    if not outcome:
+        return ""
+
+    # Очищаем от суффиксов источников в скобках, например: " (Stavka TV)", " (Legalbet)", " (Vprognoze)", " (BR)"
+    raw = re.sub(r'\s*\((?:stavka tv|legalbet|vprognoze|br|betting|tg|statarea|pinnacle)\b.*?\)', '', outcome, flags=re.IGNORECASE)
+    # Убираем завершающие точки, кавычки и пробелы
+    raw = raw.strip().rstrip('.').strip()
+    out = raw.lower()
+
+    # Вспомогательное сопоставление с командами
+    def is_team_match(query: str, target: str) -> bool:
+        if not query or not target:
+            return False
+        q_clean = unidecode(query).lower().strip()
+        t_clean = unidecode(target).lower().strip()
+        if q_clean in t_clean or t_clean in q_clean:
+            return True
+        return fuzz.partial_ratio(q_clean, t_clean) > 80
+
+    # 1. Обе забьют (ОЗ)
+    if "оз" in out or "обе забьют" in out:
+        if any(w in out for w in ["нет", "no", "не забьют", "— нет", "- нет"]):
+            return "Обе забьют — Нет (ОЗ: Нет)"
+        return "Обе забьют — Да (ОЗ: Да)"
+
+    # 2. Двойной шанс: 1X, X2, 12
+    if re.search(r'\b(1x|1х)\b', out) or ("не проиграет" in out and ("1" in out or "хозя" in out or is_team_match(out, home_team))):
+        return f"{home_team} не проиграет (1X)" if home_team else "1X (Хозяева не проиграют)"
+    if re.search(r'\b(x2|х2)\b', out) or ("не проиграет" in out and ("2" in out or "гост" in out or is_team_match(out, away_team))):
+        return f"{away_team} не проиграет (X2)" if away_team else "X2 (Гости не проиграют)"
+    if re.search(r'\b(12)\b', out) or "победа 1 или 2" in out:
+        return "Победа 1 или 2 (12)"
+
+    # 3. Ничья
+    if out in ["draw", "x", "х", "ничья", "х.", "x."] or out.startswith("ничья") or out == "мир":
         return "Ничья (Х)"
-    elif "тб 2.5" in out or "тотал больше" in out:
-        return "Тотал Больше 2.5"
-    elif "тм 2.5" in out or "тотал меньше" in out:
-        return "Тотал Меньше 2.5"
-    elif "победа:" in out or "победа " in out:
-        team = outcome.split(":", 1)[-1].strip() if ":" in outcome else outcome.replace("победа", "").strip()
-        if home_team and team.lower() in home_team.lower():
-            return f"Победа {home_team} (П1)"
-        elif away_team and team.lower() in away_team.lower():
+
+    # 4. Тоталы (ТБ / ТМ)
+    tb_match = re.search(r'(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?', out)
+    if tb_match:
+        val = tb_match.group(1).replace(',', '.')
+        return f"Тотал Больше {val} (ТБ {val})"
+    tm_match = re.search(r'(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', out)
+    if tm_match:
+        val = tm_match.group(1).replace(',', '.')
+        return f"Тотал Меньше {val} (ТМ {val})"
+
+    # 5. Форы
+    f1_match = re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', out)
+    if f1_match:
+        val = f1_match.group(1).replace(',', '.')
+        return f"Фора {home_team} ({val}) (Ф1)" if home_team else f"Фора 1 ({val})"
+    f2_match = re.search(r'(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', out)
+    if f2_match:
+        val = f2_match.group(1).replace(',', '.')
+        return f"Фора {away_team} ({val}) (Ф2)" if away_team else f"Фора 2 ({val})"
+
+    # 6. Победа 2 / Гости / П2 / Away
+    # Примеры: "ПОБЕДА 2", "победа 2.", "п2", "победа гостей", "away_win", "победа: marseille", "победа marseille"
+    if (
+        out in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды"]
+        or out.startswith("победа 2")
+        or out.endswith("п2")
+        or "победа второй" in out
+        or "победа гостей" in out
+    ):
+        return f"Победа {away_team} (П2)" if away_team else "Победа Гостей (П2)"
+
+    # 7. Победа 1 / Хозяева / П1 / Home
+    # Примеры: "ПОБЕДА 1", "победа 1.", "п1", "победа хозяев", "home_win", "победа: troyes", "победа troyes"
+    if (
+        out in ["home_win", "п1", "w1", "1", "победа 1", "победа1", "победа хозяев", "победа первой команды"]
+        or out.startswith("победа 1")
+        or out.endswith("п1")
+        or "победа первой" in out
+        or "победа хозяев" in out
+    ):
+        return f"Победа {home_team} (П1)" if home_team else "Победа Хозяев (П1)"
+
+    # 8. Явное указание команды в исходе: "Победа: Marseille", "Победа Marseille", "Marseille", "Troyes"
+    if "победа:" in out or "победа " in out or out.startswith("победа"):
+        team_part = out.split(":", 1)[-1].strip() if ":" in out else out.replace("победа", "").strip()
+        if away_team and is_team_match(team_part, away_team):
             return f"Победа {away_team} (П2)"
-        return f"Победа {team}"
-    return outcome.capitalize()
+        if home_team and is_team_match(team_part, home_team):
+            return f"Победа {home_team} (П1)"
+        if team_part:
+            return f"Победа {team_part.title()}"
+
+    # Если исход равен названию одной из команд
+    if away_team and is_team_match(out, away_team):
+        return f"Победа {away_team} (П2)"
+    if home_team and is_team_match(out, home_team):
+        return f"Победа {home_team} (П1)"
+
+    return raw.capitalize()
 
 def calculate_odds_multiplier(odds: float) -> float:
     """
@@ -156,6 +249,9 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
             s_type = p.source.source_type.value if (p.source and hasattr(p.source.source_type, 'value')) else (str(p.source.source_type) if p.source else "site")
             s_weight = round(p.source.weight, 1) if (p.source and p.source.weight) else 1.0
             
+            # Единый стандарт исхода для всех капперов и источников
+            norm_p_outcome = normalize_outcome(p.predicted_outcome, match.home_team, match.away_team)
+            
             # Размышления эксперта: из БД или динамическая генерация конкретных аргументов
             p_reasoning = getattr(p, 'reasoning', None)
             if not p_reasoning or len(str(p_reasoning).strip()) < 10:
@@ -165,7 +261,7 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                     sport=match.sport_type,
                     home_team=match.home_team,
                     away_team=match.away_team,
-                    outcome=p.predicted_outcome,
+                    outcome=norm_p_outcome,
                     odds=p.odds,
                     source_weight=s_weight
                 )
@@ -173,7 +269,7 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
             detailed_preds.append(TopBetPredictionDetail(
                 source_name=s_name,
                 source_type=s_type,
-                predicted_outcome=p.predicted_outcome,
+                predicted_outcome=norm_p_outcome,
                 odds=round(p.odds, 2),
                 confidence_score=p.confidence_score,
                 source_weight=s_weight,

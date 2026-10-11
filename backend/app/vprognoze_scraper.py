@@ -113,7 +113,7 @@ async def scrape_vprognoze():
                         pred = Prediction(
                             match_id=matched_match.id,
                             source_id=source.id,
-                            predicted_outcome=f"{outcome_str} (Vprognoze)",
+                            predicted_outcome=outcome_str.strip(),
                             odds=odds,
                             confidence_score=60.0,
                             created_at=datetime.now(timezone.utc)
