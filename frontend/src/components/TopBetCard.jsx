@@ -162,7 +162,7 @@ const TopBetCard = ({ bet }) => {
           }}
           className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-blue-600/20 to-indigo-600/20 hover:from-blue-600/30 hover:to-indigo-600/30 text-blue-300 hover:text-white rounded-xl border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-1.5 group-hover:border-blue-400/50 shadow-sm"
         >
-          <span>🔍 Полный разбор: кто куда ставит ({totalCappersCount})</span>
+          <span>💬 Мысли капперов и полный разбор ({totalCappersCount})</span>
           <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </button>
       </div>

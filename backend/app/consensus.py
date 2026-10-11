@@ -6,20 +6,35 @@ from typing import List, Dict
 
 from app.models import Match, Prediction
 from app.schemas import TopBetResponse, TopBetPredictionDetail
+from app.analytics_engine import (
+    generate_source_reasoning,
+    generate_match_tactical_analysis,
+    generate_match_key_factors,
+    generate_h2h_summary,
+    generate_ai_insight,
+    generate_cappers_consensus_reasoning
+)
 
-def normalize_outcome(outcome: str) -> str:
+def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") -> str:
     """Приводит разные форматы исходов от разных парсеров к единому стандарту для консенсуса"""
     out = outcome.lower()
     if out == "home_win" or "п1" in out or "победа хозяев" in out:
-        return "Победа Хозяев (П1)"
+        return f"Победа Хозяев ({home_team})" if home_team else "Победа Хозяев (П1)"
     elif out == "away_win" or "п2" in out or "победа гостей" in out:
-        return "Победа Гостей (П2)"
+        return f"Победа Гостей ({away_team})" if away_team else "Победа Гостей (П2)"
     elif out == "draw" or "ничья" in out or " х " in out:
         return "Ничья (Х)"
     elif "тб 2.5" in out or "тотал больше" in out:
         return "Тотал Больше 2.5"
     elif "тм 2.5" in out or "тотал меньше" in out:
         return "Тотал Меньше 2.5"
+    elif "победа:" in out or "победа " in out:
+        team = outcome.split(":", 1)[-1].strip() if ":" in outcome else outcome.replace("победа", "").strip()
+        if home_team and team.lower() in home_team.lower():
+            return f"Победа {home_team} (П1)"
+        elif away_team and team.lower() in away_team.lower():
+            return f"Победа {away_team} (П2)"
+        return f"Победа {team}"
     return outcome.capitalize()
 
 def calculate_odds_multiplier(odds: float) -> float:
@@ -79,7 +94,7 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         # Группируем прогнозы по исходам с нормализацией текста
         outcomes_map: Dict[str, List[Prediction]] = {}
         for pred in match.predictions:
-            norm_outcome = normalize_outcome(pred.predicted_outcome)
+            norm_outcome = normalize_outcome(pred.predicted_outcome, match.home_team, match.away_team)
             outcomes_map.setdefault(norm_outcome, []).append(pred)
 
         best_outcome = None
@@ -139,17 +154,67 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
             s_name = p.source.name if p.source else "Эксперт"
             s_type = p.source.source_type.value if (p.source and hasattr(p.source.source_type, 'value')) else (str(p.source.source_type) if p.source else "site")
             s_weight = round(p.source.weight, 1) if (p.source and p.source.weight) else 1.0
+            
+            # Размышления эксперта: из БД или динамическая генерация конкретных аргументов
+            p_reasoning = getattr(p, 'reasoning', None)
+            if not p_reasoning or len(str(p_reasoning).strip()) < 10:
+                p_reasoning = generate_source_reasoning(
+                    source_name=s_name,
+                    source_type=s_type,
+                    sport=match.sport_type,
+                    home_team=match.home_team,
+                    away_team=match.away_team,
+                    outcome=p.predicted_outcome,
+                    odds=p.odds,
+                    source_weight=s_weight
+                )
+            
             detailed_preds.append(TopBetPredictionDetail(
                 source_name=s_name,
                 source_type=s_type,
                 predicted_outcome=p.predicted_outcome,
                 odds=round(p.odds, 2),
                 confidence_score=p.confidence_score,
-                source_weight=s_weight
+                source_weight=s_weight,
+                reasoning=p_reasoning
             ))
 
         # Выводим в топ, только если скор больше 5.0 (чтобы покрывать даже одиночные уверенные прогнозы)
         if best_score >= 5.0:
+            # Тактический анализ матча
+            tactical = getattr(match, 'tactical_analysis', None)
+            if not tactical or len(str(tactical).strip()) < 20:
+                tactical = generate_match_tactical_analysis(
+                    match.sport_type, match.league, match.home_team, match.away_team, best_outcome, round(best_avg_odds, 2)
+                )
+
+            # Ключевые факторы матча
+            factors_raw = getattr(match, 'key_factors', None)
+            factors = []
+            if factors_raw:
+                try:
+                    import json
+                    factors = json.loads(factors_raw) if isinstance(factors_raw, str) else list(factors_raw)
+                except Exception:
+                    factors = []
+            if not factors:
+                factors = generate_match_key_factors(
+                    match.sport_type, match.league, match.home_team, match.away_team, best_outcome, round(best_avg_odds, 2)
+                )
+
+            # Очные встречи H2H
+            h2h = generate_h2h_summary(match.home_team, match.away_team, match.sport_type)
+
+            # Инсайт ИИ
+            ai_in = match.ai_insight if (match.ai_insight and len(match.ai_insight.strip()) > 5) else generate_ai_insight(
+                match.sport_type, match.home_team, match.away_team, best_outcome, round(best_avg_odds, 2), round(best_score, 1)
+            )
+
+            # Сводка капперов
+            cappers_re = match.cappers_reasoning if (match.cappers_reasoning and len(match.cappers_reasoning.strip()) > 5) else generate_cappers_consensus_reasoning(
+                best_sources, best_outcome, round(best_avg_odds, 2)
+            )
+
             top_bets.append(TopBetResponse(
                 match_id=match.id,
                 match_name=f"{match.home_team} vs {match.away_team}",
@@ -161,8 +226,11 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 confidence_score=round(best_score, 1),
                 supporting_sources=best_sources,
                 is_bet_of_the_day=match.is_bet_of_the_day or False,
-                ai_insight=match.ai_insight,
-                cappers_reasoning=match.cappers_reasoning,
+                ai_insight=ai_in,
+                cappers_reasoning=cappers_re,
+                tactical_analysis=tactical,
+                key_factors=factors,
+                h2h_summary=h2h,
                 all_predictions=detailed_preds
             ))
 

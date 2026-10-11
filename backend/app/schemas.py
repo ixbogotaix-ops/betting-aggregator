@@ -80,6 +80,7 @@ class TopBetPredictionDetail(BaseModel):
     odds: float
     confidence_score: Optional[float] = None
     source_weight: Optional[float] = 1.0
+    reasoning: Optional[str] = None
 
 # --- Consensus Schemas ---
 class TopBetResponse(BaseModel):
@@ -95,6 +96,9 @@ class TopBetResponse(BaseModel):
     is_bet_of_the_day: bool = False
     ai_insight: Optional[str] = None
     cappers_reasoning: Optional[str] = None
+    tactical_analysis: Optional[str] = None
+    key_factors: List[str] = []
+    h2h_summary: Optional[str] = None
     all_predictions: List[TopBetPredictionDetail] = []
   
 class SourceStatusResponse(BaseModel):  
