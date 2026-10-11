@@ -81,6 +81,7 @@ class TopBetPredictionDetail(BaseModel):
     confidence_score: Optional[float] = None
     source_weight: Optional[float] = 1.0
     reasoning: Optional[str] = None
+    status: Optional[str] = None
 
 # --- Consensus Schemas ---
 class TopBetResponse(BaseModel):
@@ -106,6 +107,10 @@ class TopBetResponse(BaseModel):
     country_name: Optional[str] = None
     country_flag_url: Optional[str] = None
     country_flag_emoji: Optional[str] = None
+    final_score_home: Optional[int] = None
+    final_score_away: Optional[int] = None
+    status: Optional[str] = "upcoming"
+    bet_result: Optional[str] = None
     all_predictions: List[TopBetPredictionDetail] = []
   
 class SourceStatusResponse(BaseModel):  
@@ -116,3 +121,27 @@ class SourceStatusResponse(BaseModel):
     recent_predictions_count: int  
     last_parsed_at: Optional[datetime] = None  
     status: str 
+
+class PerformanceOverview(BaseModel):
+    total_matches: int
+    wins: int
+    losses: int
+    refunds: int
+    winrate_pct: float
+    roi_pct: float
+    net_profit_units: float
+
+class SourceLeaderboardItem(BaseModel):
+    source_name: str
+    source_type: str
+    total_bets: int
+    wins: int
+    losses: int
+    refunds: int
+    winrate_pct: float
+    roi_pct: float
+    net_profit: float
+
+class PerformanceStatsResponse(BaseModel):
+    overview: PerformanceOverview
+    leaderboard: List[SourceLeaderboardItem] 

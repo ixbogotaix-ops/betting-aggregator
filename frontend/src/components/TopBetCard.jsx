@@ -295,11 +295,20 @@ const TopBetCard = ({ bet }) => {
               <span className="text-[10px] text-gray-500 font-semibold mt-0.5">Хозяева</span>
             </div>
 
-            {/* Разделитель VS */}
+            {/* Разделитель VS или Счёт матча */}
             <div className="flex flex-col items-center justify-center">
-              <span className="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] font-black text-gray-400 italic shadow-inner">
-                VS
-              </span>
+              {bet.final_score_home !== null && bet.final_score_away !== null ? (
+                <div className="flex flex-col items-center">
+                  <div className="px-2.5 py-1 rounded-xl bg-gray-800/90 border border-gray-600 font-black text-sm text-white shadow-md tracking-wider">
+                    {bet.final_score_home} : {bet.final_score_away}
+                  </div>
+                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mt-0.5">ФИНАЛ</span>
+                </div>
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] font-black text-gray-400 italic shadow-inner">
+                  VS
+                </span>
+              )}
             </div>
 
             {/* Гости */}
@@ -339,16 +348,41 @@ const TopBetCard = ({ bet }) => {
             </div>
           </div>
 
-          {/* РЕКОМЕНДУЕМЫЙ ИСХОД И КЭФ (Широкий, удобный, без сжатия) */}
-          <div className="p-3.5 bg-gradient-to-br from-blue-950/40 via-indigo-950/20 to-gray-900 rounded-2xl border border-blue-500/30 mb-3 shadow-inner">
+          {/* РЕКОМЕНДУЕМЫЙ ИСХОД И КЭФ (Широкий, удобный, с бейджем результата) */}
+          <div className={`p-3.5 bg-gradient-to-br ${
+            bet.bet_result === 'win' 
+              ? 'from-emerald-950/40 via-gray-900 to-gray-900 border-emerald-500/50' 
+              : bet.bet_result === 'loss' 
+              ? 'from-rose-950/40 via-gray-900 to-gray-900 border-rose-500/50' 
+              : bet.bet_result === 'refund' 
+              ? 'from-amber-950/40 via-gray-900 to-gray-900 border-amber-500/50' 
+              : 'from-blue-950/40 via-indigo-950/20 to-gray-900 border-blue-500/30'
+          } rounded-2xl border mb-3 shadow-inner`}>
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <span className="text-[10px] font-black uppercase tracking-wider text-blue-300 flex items-center gap-1">
                 <Target className="w-3.5 h-3.5 text-blue-400" />
                 <span>Рекомендуемый исход</span>
               </span>
-              <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-sm rounded-lg shadow-sm">
-                КЭФ {bet.average_odds.toFixed(2)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {bet.bet_result === 'win' && (
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black rounded-md flex items-center gap-1 animate-pulse">
+                    ✅ ЗАШЛА
+                  </span>
+                )}
+                {bet.bet_result === 'loss' && (
+                  <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-black rounded-md flex items-center gap-1">
+                    ❌ МИМО
+                  </span>
+                )}
+                {bet.bet_result === 'refund' && (
+                  <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black rounded-md flex items-center gap-1">
+                    🔄 ВОЗВРАТ
+                  </span>
+                )}
+                <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-sm rounded-lg shadow-sm">
+                  КЭФ {bet.average_odds.toFixed(2)}
+                </span>
+              </div>
             </div>
             <div className="font-black text-white text-base leading-snug">
               {formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}

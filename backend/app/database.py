@@ -23,7 +23,10 @@ async def init_db():
         for col_sql in [
             "ALTER TABLE predictions ADD COLUMN reasoning TEXT",
             "ALTER TABLE matches ADD COLUMN tactical_analysis TEXT",
-            "ALTER TABLE matches ADD COLUMN key_factors TEXT"
+            "ALTER TABLE matches ADD COLUMN key_factors TEXT",
+            "ALTER TABLE matches ADD COLUMN final_score_home INTEGER",
+            "ALTER TABLE matches ADD COLUMN final_score_away INTEGER",
+            "ALTER TABLE predictions ADD COLUMN status VARCHAR(20)"
         ]:
             try:
                 await conn.execute(text(col_sql))

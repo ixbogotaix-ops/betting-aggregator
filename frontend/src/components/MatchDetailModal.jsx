@@ -263,18 +263,33 @@ const MatchDetailModal = ({ bet, onClose }) => {
             </div>
 
             <div className="flex flex-col items-center justify-center px-2">
-              <div className="px-3.5 py-1.5 bg-gray-800/90 rounded-2xl border border-gray-700 text-center mb-1 shadow-inner">
-                <span className="text-[11px] text-gray-400 block font-semibold">
-                  {mskTime.day}
-                </span>
-                <span className="text-lg font-black text-white">
-                  {mskTime.time}
-                </span>
-                <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest block mt-0.5">
-                  МСК
-                </span>
-              </div>
-              <span className="text-xs font-black text-gray-500 italic">VS</span>
+              {bet.final_score_home !== null && bet.final_score_away !== null ? (
+                <div className="flex flex-col items-center">
+                  <div className="px-4 py-2 bg-gray-800/95 rounded-2xl border border-gray-600 text-center mb-1 shadow-inner">
+                    <span className="text-2xl font-black text-white tracking-wider">
+                      {bet.final_score_home} : {bet.final_score_away}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest block mt-0.5">
+                      МАТЧ ЗАВЕРШЁН
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-3.5 py-1.5 bg-gray-800/90 rounded-2xl border border-gray-700 text-center mb-1 shadow-inner">
+                  <span className="text-[11px] text-gray-400 block font-semibold">
+                    {mskTime.day}
+                  </span>
+                  <span className="text-lg font-black text-white">
+                    {mskTime.time}
+                  </span>
+                  <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest block mt-0.5">
+                    МСК
+                  </span>
+                </div>
+              )}
+              {bet.final_score_home === null && (
+                <span className="text-xs font-black text-gray-500 italic">VS</span>
+              )}
             </div>
 
             <div className="flex flex-col items-center flex-1 text-center">
@@ -292,15 +307,40 @@ const MatchDetailModal = ({ bet, onClose }) => {
           </div>
 
           {/* Главный консенсус плашка */}
-          <div className="mt-5 p-4 bg-gradient-to-r from-blue-950/60 via-indigo-950/40 to-gray-900 rounded-2xl border border-blue-500/30 shadow-inner flex items-center justify-between gap-4">
+          <div className={`mt-5 p-4 bg-gradient-to-r ${
+            bet.bet_result === 'win'
+              ? 'from-emerald-950/60 via-gray-900 to-gray-900 border-emerald-500/50'
+              : bet.bet_result === 'loss'
+              ? 'from-rose-950/60 via-gray-900 to-gray-900 border-rose-500/50'
+              : bet.bet_result === 'refund'
+              ? 'from-amber-950/60 via-gray-900 to-gray-900 border-amber-500/50'
+              : 'from-blue-950/60 via-indigo-950/40 to-gray-900 border-blue-500/30'
+          } rounded-2xl border shadow-inner flex items-center justify-between gap-4`}>
             <div className="flex items-center gap-3">
               <div className="p-3 bg-blue-500/20 rounded-xl text-blue-400 shrink-0">
                 <Target className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-blue-300 font-bold block">
-                  Главный консенсус алгоритма
-                </span>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[11px] uppercase tracking-wider text-blue-300 font-bold">
+                    Главный консенсус алгоритма
+                  </span>
+                  {bet.bet_result === 'win' && (
+                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black rounded-md animate-pulse">
+                      ✅ СТАВКА ЗАШЛА
+                    </span>
+                  )}
+                  {bet.bet_result === 'loss' && (
+                    <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-black rounded-md">
+                      ❌ НЕ ЗАШЛА
+                    </span>
+                  )}
+                  {bet.bet_result === 'refund' && (
+                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black rounded-md">
+                      🔄 ВОЗВРАТ
+                    </span>
+                  )}
+                </div>
                 <span className="text-lg font-black text-white leading-tight">
                   {formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}
                 </span>
@@ -438,9 +478,26 @@ const MatchDetailModal = ({ bet, onClose }) => {
                           </div>
 
                           <div className="text-right shrink-0">
-                            <span className="font-black text-emerald-400 text-sm block">
-                              {formatOutcome(p.predicted_outcome, homeTeam, awayTeam)}
-                            </span>
+                            <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                              {p.status === 'win' && (
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black rounded">
+                                  ✅ Зашло
+                                </span>
+                              )}
+                              {p.status === 'loss' && (
+                                <span className="px-1.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-black rounded">
+                                  ❌ Мимо
+                                </span>
+                              )}
+                              {p.status === 'refund' && (
+                                <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-black rounded">
+                                  🔄 Возврат
+                                </span>
+                              )}
+                              <span className="font-black text-emerald-400 text-sm block">
+                                {formatOutcome(p.predicted_outcome, homeTeam, awayTeam)}
+                              </span>
+                            </div>
                             <span className="text-[11px] text-gray-400 font-bold">
                               Кэф: <strong className="text-white text-xs">{p.odds}</strong>
                             </span>

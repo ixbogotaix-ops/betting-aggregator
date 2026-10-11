@@ -35,8 +35,27 @@ def start_scheduler():
         hours=2
     )
 
+    async def scheduled_settlement_job():
+        logger.info("=== ПРОВЕРКА РЕЗУЛЬТАТОВ МАТЧЕЙ И РАСЧЕТ ВЫИГРЫШЕЙ ПО РАСПИСАНИЮ ===")
+        from app.settlement_service import SettlementService
+        from app.database import AsyncSessionLocal
+        try:
+            service = SettlementService()
+            async with AsyncSessionLocal() as session:
+                res = await service.sync_scores_and_settle(session)
+                logger.info(f"Итоги проверки счетов: {res}")
+        except Exception as e:
+            logger.error(f"Ошибка проверки счетов по расписанию: {e}")
+
+    # Запуск проверки результатов завершённых матчей каждый 1 час
+    scheduler.add_job(
+        scheduled_settlement_job,
+        'interval',
+        hours=1
+    )
+
     scheduler.start()
-    logger.info("Автоматическое расписание запущено! Каждые 2 часа + 12:00 и 17:00.")
+    logger.info("Автоматическое расписание запущено! Парсинг каждые 2ч, проверка результатов каждый 1ч.")
 
     # Проверка при старте приложения: если свежих прогнозов нет, запускаем сбор
     async def initial_check():

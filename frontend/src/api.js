@@ -7,11 +7,12 @@ const api = axios.create({
   timeout: 10000,
 });
 
-export const getTopBets = async (sportType = null, date = null) => {
+export const getTopBets = async (sportType = null, date = null, statusFilter = null) => {
   try {
     const params = {};
     if (sportType && sportType !== 'All') params.sport_type = sportType;
     if (date) params.date = date;
+    if (statusFilter) params.status_filter = statusFilter;
     const response = await api.get('/predictions/top-daily', { params });
     return response.data;
   } catch (error) {
@@ -29,6 +30,38 @@ export const getTodayMatches = async (sportType = null, date = null) => {
     return response.data;
   } catch (error) {
     console.error("Error fetching today matches:", error);
+    throw error;
+  }
+};
+
+export const getPerformanceStats = async () => {
+  try {
+    const response = await api.get('/stats/overview');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching performance stats:", error);
+    return null;
+  }
+};
+
+export const getRecentResults = async (sportType = null) => {
+  try {
+    const params = {};
+    if (sportType && sportType !== 'All') params.sport_type = sportType;
+    const response = await api.get('/results/recent', { params });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching recent results:", error);
+    return [];
+  }
+};
+
+export const syncMatchResults = async () => {
+  try {
+    const response = await api.post('/results/sync');
+    return response.data;
+  } catch (error) {
+    console.error("Error syncing match results:", error);
     throw error;
   }
 };

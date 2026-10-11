@@ -129,9 +129,10 @@ def get_generic_sport(sport_name: str) -> str:
 async def get_top_daily_bets(
     sport_type: Optional[str] = Query(None, description="Фильтр по виду спорта"),
     date: Optional[str] = Query(None, description="Дата в формате YYYY-MM-DD"),
+    status_filter: Optional[str] = Query(None, description="upcoming / finished"),
     db: AsyncSession = Depends(get_db)
 ):
-    top_bets = await calculate_daily_top_bets(db, sport_type, date)
+    top_bets = await calculate_daily_top_bets(db, sport_type, date, status_filter)
 
     # Оставляем только ОДНУ лучшую ставку на каждый БАЗОВЫЙ вид спорта!
     filtered_bets = []
@@ -259,3 +260,39 @@ async def get_ai_analysis(
     ai_verdict = await analyze_top_bets_with_ai(top_bets_data)
     
     return {"ai_verdict": ai_verdict}
+
+@app.get("/api/stats/overview", response_model=schemas.PerformanceStatsResponse)
+async def get_stats_overview(db: AsyncSession = Depends(get_db)):
+    """
+    Возвращает статистику проходимости (Winrate, ROI) и рейтинг капперов/источников.
+    """
+    from .settlement_service import get_performance_stats
+    stats = await get_performance_stats(db)
+    return stats
+
+@app.post("/api/results/sync")
+async def sync_match_results(background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    """
+    Запускает проверку завершённых счетов матчей и расчёт выигрышей/проигрышей.
+    """
+    from .settlement_service import SettlementService
+    service = SettlementService()
+    
+    async def run_settlement():
+        from .database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            await service.sync_scores_and_settle(session)
+            
+    background_tasks.add_task(run_settlement)
+    return {"status": "started", "message": "Проверка результатов матчей запущена в фоновом режиме"}
+
+@app.get("/api/results/recent", response_model=List[TopBetResponse])
+async def get_recent_results(
+    sport_type: Optional[str] = Query(None, description="Фильтр по виду спорта"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Возвращает недавние завершённые матчи с результатами ставок (Архив / Прошедшие).
+    """
+    finished_bets = await calculate_daily_top_bets(db, sport_type=sport_type, date_str=None, status_filter="finished")
+    return finished_bets

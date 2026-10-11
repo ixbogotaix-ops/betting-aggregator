@@ -159,34 +159,49 @@ def calculate_odds_multiplier(odds: float) -> float:
         return 0.8  # Легкий штраф за риск
     return 1.0
 
-async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None, date_str: str = None) -> List[TopBetResponse]:
+async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None, date_str: str = None, status_filter: str = None) -> List[TopBetResponse]:
     """
     Отбирает матчи на выбранную дату и агрегирует прогнозы реальных капперов.
-    Индекс уверенности сильно зависит от веса (ROI) капперов и их консенсуса.
+    Поддерживает фильтрацию по статусу: 'upcoming', 'finished' (архив) или все.
     """
     moscow_tz = timezone(timedelta(hours=3))
     now_moscow = datetime.now(moscow_tz).replace(tzinfo=None)
     
-    if date_str and date_str != "ALL":
-        target_date = datetime.strptime(date_str, "%Y-%m-%d")
-        start_filter = datetime.combine(target_date.date(), time.min)
-        end_of_day = datetime.combine(target_date.date(), time.max)
+    if status_filter == "finished":
+        stmt = select(Match).options(
+            selectinload(Match.predictions).selectinload(Prediction.source)
+        ).where(
+            (Match.status == MatchStatus.finished) | (Match.final_score_home != None)
+        )
+        if date_str and date_str != "ALL":
+            target_date = datetime.strptime(date_str, "%Y-%m-%d")
+            stmt = stmt.where(
+                Match.match_date >= datetime.combine(target_date.date(), time.min),
+                Match.match_date <= datetime.combine(target_date.date(), time.max)
+            )
     else:
-        target_date = now_moscow
-        start_filter = datetime.combine(target_date.date(), time.min)
-        end_of_day = now_moscow + timedelta(days=365) # Если ALL, берем всё будущее
-        
-    # Скрываем матчи, которые уже начались, если смотрим текущий день или ALL
-    if date_str == "ALL" or target_date.date() == now_moscow.date():
-        start_filter = now_moscow
+        if date_str and date_str != "ALL":
+            target_date = datetime.strptime(date_str, "%Y-%m-%d")
+            start_filter = datetime.combine(target_date.date(), time.min)
+            end_of_day = datetime.combine(target_date.date(), time.max)
+        else:
+            target_date = now_moscow
+            start_filter = datetime.combine(target_date.date(), time.min)
+            end_of_day = now_moscow + timedelta(days=365) # Если ALL, берем всё будущее
+            
+        # Скрываем матчи, которые уже начались, если смотрим текущий день или ALL (если не запрошен архив)
+        if (date_str == "ALL" or target_date.date() == now_moscow.date()) and status_filter != "finished":
+            start_filter = now_moscow
 
-    # Получаем матчи с прогнозами и источниками
-    stmt = select(Match).options(
-        selectinload(Match.predictions).selectinload(Prediction.source)
-    ).where(
-        Match.match_date >= start_filter,
-        Match.match_date <= end_of_day
-    )
+        # Получаем матчи с прогнозами и источниками
+        stmt = select(Match).options(
+            selectinload(Match.predictions).selectinload(Prediction.source)
+        ).where(
+            Match.match_date >= start_filter,
+            Match.match_date <= end_of_day
+        )
+        if status_filter == "upcoming":
+            stmt = stmt.where(Match.status == MatchStatus.upcoming)
 
     if sport_type:
         stmt = stmt.where(Match.sport_type == sport_type)
@@ -281,6 +296,16 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                     source_weight=s_weight
                 )
             
+            # Исход ставки источника (если матч завершен)
+            p_status_val = None
+            if hasattr(p, 'status') and p.status:
+                p_status_val = p.status.value if hasattr(p.status, 'value') else str(p.status)
+            elif match.final_score_home is not None and match.final_score_away is not None:
+                from .settlement_service import evaluate_bet_outcome
+                eval_st = evaluate_bet_outcome(norm_p_outcome, match.final_score_home, match.final_score_away, match.home_team, match.away_team)
+                if eval_st:
+                    p_status_val = eval_st.value
+
             detailed_preds.append(TopBetPredictionDetail(
                 source_name=s_name,
                 source_type=s_type,
@@ -288,7 +313,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 odds=round(p.odds, 2),
                 confidence_score=p.confidence_score,
                 source_weight=s_weight,
-                reasoning=p_reasoning
+                reasoning=p_reasoning,
+                status=p_status_val
             ))
 
         # Выводим в топ, только если скор больше 5.0 (чтобы покрывать даже одиночные уверенные прогнозы)
@@ -332,6 +358,16 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
             a_logo = get_team_logo(match.away_team, match.sport_type)
             country_info = get_league_country(match.league, match.sport_type)
 
+            # Исход консенсуса
+            bet_res_val = None
+            if match.final_score_home is not None and match.final_score_away is not None:
+                from .settlement_service import evaluate_bet_outcome
+                eval_cons = evaluate_bet_outcome(best_outcome, match.final_score_home, match.final_score_away, match.home_team, match.away_team)
+                if eval_cons:
+                    bet_res_val = eval_cons.value
+            
+            m_status_str = match.status.value if hasattr(match.status, 'value') else str(match.status)
+
             top_bets.append(TopBetResponse(
                 match_id=match.id,
                 match_name=f"{match.home_team} vs {match.away_team}",
@@ -355,6 +391,10 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 country_name=country_info.get("name"),
                 country_flag_url=country_info.get("flag_url"),
                 country_flag_emoji=country_info.get("emoji"),
+                final_score_home=match.final_score_home,
+                final_score_away=match.final_score_away,
+                status=m_status_str,
+                bet_result=bet_res_val,
                 all_predictions=detailed_preds
             ))
 
