@@ -38,7 +38,7 @@ Thumbs.db
 *.html
 test_*.py
 test.py
-mod*.py
+/mod*.py
 lb_data.json
 stv_card.txt
 run_ai.py
