@@ -7,7 +7,7 @@ import re
 from thefuzz import fuzz
 from unidecode import unidecode
 
-from app.models import Match, Prediction
+from app.models import Match, Prediction, MatchStatus
 from app.schemas import TopBetResponse, TopBetPredictionDetail
 from app.analytics_engine import (
     generate_source_reasoning,
