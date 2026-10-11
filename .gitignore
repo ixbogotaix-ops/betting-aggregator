@@ -36,6 +36,7 @@ Thumbs.db
 
 # Scratch and test files
 *.html
+!frontend/index.html
 test_*.py
 test.py
 /mod*.py

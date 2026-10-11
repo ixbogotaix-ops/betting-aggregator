@@ -16,43 +16,60 @@ export default function AuthModal({ isOpen, onClose }) {
       return;
     }
 
-    // Инициализация Google Identity Services, если скрипт загружен и Client ID задан
-    if (typeof window !== 'undefined' && window.google && googleClientId) {
-      try {
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: async (response) => {
-            if (response.credential) {
-              setLoading(true);
-              setError(null);
-              try {
-                await loginWithGoogle(response.credential);
-                onClose();
-              } catch (err) {
-                setError("Ошибка проверки токена Google. Попробуйте еще раз.");
-              } finally {
-                setLoading(false);
+    const initGis = () => {
+      if (typeof window !== 'undefined' && window.google && googleClientId) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: async (response) => {
+              if (response.credential) {
+                setLoading(true);
+                setError(null);
+                try {
+                  await loginWithGoogle(response.credential);
+                  onClose();
+                } catch (err) {
+                  setError("Ошибка проверки токена Google. Попробуйте еще раз.");
+                } finally {
+                  setLoading(false);
+                }
               }
-            }
-          },
-          auto_select: false,
-        });
-
-        const btnContainer = document.getElementById("google-signin-container");
-        if (btnContainer) {
-          btnContainer.innerHTML = '';
-          window.google.accounts.id.renderButton(btnContainer, {
-            theme: "filled_blue",
-            size: "large",
-            shape: "pill",
-            text: "signin_with",
-            locale: "ru",
-            width: 280,
+            },
+            auto_select: false,
           });
+
+          const btnContainer = document.getElementById("google-signin-container");
+          if (btnContainer) {
+            btnContainer.innerHTML = '';
+            window.google.accounts.id.renderButton(btnContainer, {
+              theme: "filled_blue",
+              size: "large",
+              shape: "pill",
+              text: "signin_with",
+              locale: "ru",
+              width: 280,
+            });
+          }
+        } catch (err) {
+          console.error("GIS init error:", err);
         }
-      } catch (err) {
-        console.error("GIS init error:", err);
       }
+    };
+
+    if (typeof window !== 'undefined' && !window.google) {
+      const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => initGis();
+        document.head.appendChild(script);
+      } else {
+        existingScript.addEventListener('load', () => initGis());
+      }
+    } else {
+      initGis();
     }
   }, [isOpen, googleClientId]);
 
