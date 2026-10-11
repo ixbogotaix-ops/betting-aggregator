@@ -8,8 +8,8 @@ services:
     restart: always
     env_file:
       - ./backend/.env
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - ./backend/betting_db.sqlite:/app/betting_db.sqlite
     networks:

@@ -205,10 +205,33 @@ async def get_sources_status(db: AsyncSession = Depends(get_db)):
         
     return status_list
 
+_last_sync_time = 0
+_sync_lock = False
+
 @app.post("/api/sources/sync")
 async def sync_sources(background_tasks: BackgroundTasks):
-    from .capper_scraper import process_capper_predictions
-    background_tasks.add_task(process_capper_predictions)
+    global _last_sync_time, _sync_lock
+    import time
+    now = time.time()
+    
+    if _sync_lock or (now - _last_sync_time < 45):
+        return {
+            "status": "rate_limited", 
+            "message": "Сбор данных уже выполняется или запускался недавно. Подождите немного."
+        }
+        
+    _last_sync_time = now
+    _sync_lock = True
+    
+    async def run_sync_with_unlock():
+        global _sync_lock
+        from .capper_scraper import process_capper_predictions
+        try:
+            await process_capper_predictions()
+        finally:
+            _sync_lock = False
+
+    background_tasks.add_task(run_sync_with_unlock)
     return {"status": "started", "message": "Сбор прогнозов запущен в фоновом режиме"}
 
 @app.get("/api/ai-analyze-bets")
