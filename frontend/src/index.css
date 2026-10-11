@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .progress-bar {
+    @apply h-2 rounded-full overflow-hidden bg-gray-700 relative;
+  }
+  .progress-fill {
+    @apply absolute top-0 left-0 h-full rounded-full transition-all duration-1000;
+  }
+}

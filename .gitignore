@@ -1,0 +1,44 @@
+# Environment & Credentials
+.env
+backend/.env
+frontend/.env
+*.env
+
+# Databases
+*.sqlite
+*.sqlite3
+backend/*.sqlite
+backend/betting_db.sqlite
+betting_db.sqlite
+
+# Python Virtual Environments & Cache
+venv/
+backend/venv/
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Frontend Dependencies & Build Output
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+frontend/build/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Scratch and test files
+*.html
+test_*.py
+test.py
+mod*.py
+lb_data.json
+stv_card.txt
+run_ai.py
