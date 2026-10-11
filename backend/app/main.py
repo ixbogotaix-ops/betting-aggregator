@@ -296,3 +296,49 @@ async def get_recent_results(
     """
     finished_bets = await calculate_daily_top_bets(db, sport_type=sport_type, date_str=None, status_filter="finished")
     return finished_bets
+
+@app.get("/api/parlays/daily", response_model=schemas.DailyParlaysResponse)
+async def get_daily_parlays_endpoint(db: AsyncSession = Depends(get_db)):
+    """
+    Генерирует два готовых экспресса дня:
+    1. Надёжный (Safe) — 2-3 матча с наивысшей проходимостью
+    2. Огненный (Hot) — 3-4 матча с высоким общим кэфом
+    """
+    from .parlay_service import generate_daily_parlays
+    return await generate_daily_parlays(db)
+
+@app.post("/api/telegram/send-parlay")
+async def send_parlay_to_telegram(
+    parlay_type: str = Query("safe", description="safe или hot"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Отправляет выбранный экспресс в Telegram-канал.
+    """
+    from .parlay_service import generate_daily_parlays
+    from .telegram_bot import send_parlay_alert
+    
+    parlays = await generate_daily_parlays(db)
+    selected = parlays.get("safe_parlay" if parlay_type == "safe" else "hot_parlay")
+    
+    if not selected:
+        raise HTTPException(status_code=404, detail="Экспресс данного типа не сформирован (недостаточно матчей)")
+        
+    success = send_parlay_alert(selected)
+    if not success:
+        return {"status": "error", "message": "Не удалось отправить сообщение (проверьте токен бота и chat_id)"}
+    return {"status": "ok", "message": f"Экспресс ({parlay_type}) успешно отправлен в Telegram!"}
+
+@app.post("/api/telegram/send-super-alerts")
+async def trigger_super_consensus_alerts(db: AsyncSession = Depends(get_db)):
+    """
+    Сканирует матчи и отправляет срочные алерты по супер-консенсусу (4+ источника / 85%+ уверенность).
+    """
+    from .telegram_bot import check_and_notify_super_consensus
+    top_bets = await calculate_daily_top_bets(db, status_filter="upcoming")
+    if not top_bets:
+        top_bets = await calculate_daily_top_bets(db)
+        
+    sent_count = await check_and_notify_super_consensus(top_bets)
+    return {"status": "ok", "sent_alerts_count": sent_count}
+

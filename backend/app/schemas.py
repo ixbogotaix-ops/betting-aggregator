@@ -144,4 +144,31 @@ class SourceLeaderboardItem(BaseModel):
 
 class PerformanceStatsResponse(BaseModel):
     overview: PerformanceOverview
-    leaderboard: List[SourceLeaderboardItem] 
+    leaderboard: List[SourceLeaderboardItem]
+
+class ParlayItem(BaseModel):
+    match_id: int
+    match_name: str
+    match_date: datetime
+    sport_type: str
+    league: str
+    outcome: str
+    odds: float
+    confidence_score: float
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    home_logo: Optional[str] = None
+    away_logo: Optional[str] = None
+
+class ParlayCard(BaseModel):
+    title: str
+    type: str
+    tag: str
+    total_odds: float
+    items_count: int
+    potential_win_1000: float
+    items: List[ParlayItem] = []
+
+class DailyParlaysResponse(BaseModel):
+    safe_parlay: Optional[ParlayCard] = None
+    hot_parlay: Optional[ParlayCard] = None 

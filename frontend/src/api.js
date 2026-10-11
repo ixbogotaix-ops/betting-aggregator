@@ -79,3 +79,34 @@ export const getAiAnalysis = async (sportType = null, date = null) => {
     throw error;
   }
 };
+
+export const getDailyParlays = async () => {
+  try {
+    const response = await api.get('/parlays/daily');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching daily parlays:", error);
+    return { safe_parlay: null, hot_parlay: null };
+  }
+};
+
+export const sendParlayToTelegram = async (parlayType = 'safe') => {
+  try {
+    const response = await api.post(`/telegram/send-parlay?parlay_type=${parlayType}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error sending parlay to Telegram:", error);
+    throw error;
+  }
+};
+
+export const sendSuperAlerts = async () => {
+  try {
+    const response = await api.post('/telegram/send-super-alerts');
+    return response.data;
+  } catch (error) {
+    console.error("Error triggering super alerts:", error);
+    throw error;
+  }
+};
+

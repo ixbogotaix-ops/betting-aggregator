@@ -276,6 +276,15 @@ async def process_capper_predictions():
             updated_top_bets = await calculate_daily_top_bets(session)
             await notify_daily_top_bets(updated_top_bets)
             
+            # Проверяем и отправляем срочные алерты супер-консенсуса (4+ источника / 85%+ уверенность)
+            try:
+                from .telegram_bot import check_and_notify_super_consensus
+                alert_count = await check_and_notify_super_consensus(updated_top_bets)
+                if alert_count:
+                    logger.info(f"Отправлено {alert_count} экстренных алертов супер-консенсуса в Telegram")
+            except Exception as e:
+                logger.error(f"Ошибка отправки супер-консенсус алерта: {e}")
+            
         logger.info(f"Парсинг завершен!")
 
 if __name__ == "__main__":

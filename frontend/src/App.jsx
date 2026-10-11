@@ -5,13 +5,14 @@ import TopBetCard from './components/TopBetCard';
 import MatchList from './components/MatchList';
 import SourcesSidebar from './components/SourcesSidebar';
 import StatsLeaderboard from './components/StatsLeaderboard';
-import { Flame, CalendarDays, AlertTriangle, Bot, CheckCircle2, Trophy, Clock } from 'lucide-react';
+import DailyParlaysWidget from './components/DailyParlaysWidget';
+import { Flame, CalendarDays, AlertTriangle, Bot, CheckCircle2, Trophy, Clock, Zap, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 function App() {
   const [currentSport, setCurrentSport] = useState('All');
-  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'archive', 'stats'
+  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'parlays', 'archive', 'stats'
   
   // Устанавливаем сегодняшнюю дату по умолчанию (формат YYYY-MM-DD)
   const today = new Date().toISOString().split('T')[0];
@@ -111,6 +112,18 @@ function App() {
             </button>
 
             <button
+              onClick={() => setActiveTab('parlays')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                activeTab === 'parlays'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/25 ring-1 ring-orange-400/40'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
+              }`}
+            >
+              <Zap className="w-4 h-4 text-amber-300" />
+              <span>⚡ Экспресс Дня</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('archive')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
                 activeTab === 'archive'
@@ -138,6 +151,32 @@ function App() {
           {/* ВЫБРАННЫЙ РАЗДЕЛ 1: ПРЕДСТОЯЩИЕ ТОП-СТАВКИ */}
           {activeTab === 'upcoming' && (
             <>
+              {/* Баннер Экспресса Дня */}
+              <div 
+                onClick={() => setActiveTab('parlays')}
+                className="mb-8 p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-orange-950/30 to-purple-950/30 border border-orange-500/30 hover:border-orange-500/60 transition-all cursor-pointer flex items-center justify-between gap-4 group shadow-lg"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="p-2.5 bg-orange-500/20 text-orange-400 rounded-xl group-hover:scale-110 transition-transform">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm sm:text-base">Сформирован Экспресс Дня от ИИ</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-500/20 text-orange-300 border border-orange-500/30 animate-pulse">
+                        HOT
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Готовые купоны: 🛡️ Надёжный и 🚀 Огненный с калькулятором выигрыша
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-orange-400 font-bold text-xs sm:text-sm group-hover:translate-x-1 transition-transform shrink-0">
+                  <span>Открыть купон</span>
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              </div>
               {/* Секция Топ Ставок */}
               <section className="mb-12">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -236,6 +275,13 @@ function App() {
                 </div>
               </section>
             </>
+          )}
+
+          {/* ВЫБРАННЫЙ РАЗДЕЛ: ЭКСПРЕСС ДНЯ */}
+          {activeTab === 'parlays' && (
+            <div className="animate-fade-in">
+              <DailyParlaysWidget />
+            </div>
           )}
 
           {/* ВЫБРАННЫЙ РАЗДЕЛ 2: АРХИВ ЗАВЕРШЁННЫХ МАТЧЕЙ И СЧЕТА */}
