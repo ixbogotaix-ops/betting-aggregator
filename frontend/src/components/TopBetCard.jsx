@@ -19,7 +19,18 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     return s.includes(t) || t.includes(s);
   };
 
-  // 1. Обе забьют (ОЗ)
+  // 1. Тайм / Матч (КРИТИЧЕСКИ ВАЖНО: отделять от ординаров П1/П2!)
+  if (low.includes('тайм / матч') || low.includes('тайм/матч') || low.includes('тайм-матч') || low.includes('т/м:') || /\b(н\/п1|н\/п2|п1\/п1|п2\/п2|п1\/н|п2\/н|п1\/п2|п2\/п1)\b/i.test(low)) {
+    const cleanTm = clean.replace(/тайм\s*[\/\-]\s*матч\s*[\-—:]\s*/gi, '').trim();
+    return `Тайм/Матч: ${cleanTm}`;
+  }
+
+  // 2. Комбинированные ставки
+  if (low.includes(' и тб') || low.includes(' и тм') || low.includes(' + тб') || low.includes(' + тм') || low.includes(' и оз') || low.includes(' + оз')) {
+    return clean;
+  }
+
+  // 3. Обе забьют (ОЗ)
   if (low.includes('оз') || low.includes('обе забьют')) {
     if (low.includes('нет') || low.includes('no') || low.includes('не забьют') || low.includes('— нет') || low.includes('- нет')) {
       return 'Обе забьют — Нет (ОЗ: Нет)';
@@ -27,7 +38,7 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     return 'Обе забьют — Да (ОЗ: Да)';
   }
 
-  // 2. Двойной шанс
+  // 4. Двойной шанс
   if (/\b(1x|1х)\b/i.test(low) || (low.includes('не проиграет') && (low.includes('1') || low.includes('хозя') || cleanMatch(low, homeTeam)))) {
     return homeTeam ? `${homeTeam} не проиграет (1X)` : '1X (Хозяева не проиграют)';
   }
@@ -38,24 +49,12 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     return 'Победа 1 или 2 (12)';
   }
 
-  // 3. Ничья
+  // 5. Ничья
   if (['draw', 'x', 'х', 'ничья', 'х.', 'x.'].includes(low) || low.startsWith('ничья')) {
     return 'Ничья (Х)';
   }
 
-  // 4. Тоталы
-  const tb = low.match(/(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?/i);
-  if (tb) {
-    const v = tb[1].replace(',', '.');
-    return `Тотал Больше ${v} (ТБ ${v})`;
-  }
-  const tm = low.match(/(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?/i);
-  if (tm) {
-    const v = tm[1].replace(',', '.');
-    return `Тотал Меньше ${v} (ТМ ${v})`;
-  }
-
-  // 5. Форы
+  // 6. Форы
   const f1 = low.match(/(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
   if (f1) {
     const v = f1[1].replace(',', '.');
@@ -67,39 +66,60 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     return awayTeam ? `Фора ${awayTeam} (${v}) (Ф2)` : `Фора 2 (${v})`;
   }
 
-  // 6. Победа 2 / Гости (П2)
+  // 7. Тоталы
+  const tb = low.match(/(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?/i);
+  if (tb) {
+    const v = tb[1].replace(',', '.');
+    return `Тотал Больше ${v} (ТБ ${v})`;
+  }
+  const tm = low.match(/(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?/i);
+  if (tm) {
+    const v = tm[1].replace(',', '.');
+    return `Тотал Меньше ${v} (ТМ ${v})`;
+  }
+  const tot = low.match(/тотал\s*(\d+[\.,]?\d*)/i);
+  if (tot) {
+    const v = tot[1].replace(',', '.');
+    return `Тотал Больше ${v} (ТБ ${v})`;
+  }
+
+  // 8. ЧИСТАЯ Победа 2 / Гости (П2)
   if (
-    ['away_win', 'п2', 'w2', '2', 'победа 2', 'победа2', 'победа гостей', 'победа второй команды'].includes(low) ||
-    low.startsWith('победа 2') ||
-    low.endsWith('п2') ||
-    low.includes('победа второй') ||
-    low.includes('победа гостей')
+    ['away_win', 'п2', 'w2', '2', 'победа 2', 'победа2', 'победа гостей', 'победа второй команды', 'победа второй'].includes(low) ||
+    /\b(победа\s*2|победа\s*гостей|победа\s*второй)\b/i.test(low) ||
+    /\(п2\)/i.test(low) ||
+    /^п2[\.\s]*$/i.test(low) ||
+    /^w2[\.\s]*$/i.test(low) ||
+    /^2[\.\s]*$/i.test(low)
   ) {
     return awayTeam ? `Победа ${awayTeam} (П2)` : 'Победа Гостей (П2)';
   }
 
-  // 7. Победа 1 / Хозяева (П1)
+  // 9. ЧИСТАЯ Победа 1 / Хозяева (П1)
   if (
-    ['home_win', 'п1', 'w1', '1', 'победа 1', 'победа1', 'победа хозяев', 'победа первой команды'].includes(low) ||
-    low.startsWith('победа 1') ||
-    low.endsWith('п1') ||
-    low.includes('победа первой') ||
-    low.includes('победа хозяев')
+    ['home_win', 'п1', 'w1', '1', 'победа 1', 'победа1', 'победа хозяев', 'победа первой команды', 'победа первой'].includes(low) ||
+    /\b(победа\s*1|победа\s*хозяев|победа\s*первой)\b/i.test(low) ||
+    /\(п1\)/i.test(low) ||
+    /^п1[\.\s]*$/i.test(low) ||
+    /^w1[\.\s]*$/i.test(low) ||
+    /^1[\.\s]*$/i.test(low)
   ) {
     return homeTeam ? `Победа ${homeTeam} (П1)` : 'Победа Хозяев (П1)';
   }
 
-  // 8. Победа: Название команды
+  // 10. Победа: Название команды
   if (low.startsWith('победа:') || low.startsWith('победа ')) {
     const teamPart = low.includes(':') ? low.split(':')[1].trim() : low.replace('победа', '').trim();
-    if (awayTeam && cleanMatch(teamPart, awayTeam)) {
-      return `Победа ${awayTeam} (П2)`;
-    }
-    if (homeTeam && cleanMatch(teamPart, homeTeam)) {
-      return `Победа ${homeTeam} (П1)`;
-    }
-    if (teamPart) {
-      return `Победа ${teamPart}`;
+    if (!['тотал', 'тб', 'тм', 'тайм', 'фора'].some(k => teamPart.includes(k))) {
+      if (awayTeam && cleanMatch(teamPart, awayTeam)) {
+        return `Победа ${awayTeam} (П2)`;
+      }
+      if (homeTeam && cleanMatch(teamPart, homeTeam)) {
+        return `Победа ${homeTeam} (П1)`;
+      }
+      if (teamPart) {
+        return `Победа ${teamPart}`;
+      }
     }
   }
 
@@ -127,22 +147,35 @@ const getRussianSport = (sport) => {
 const formatCardMoscowTime = (dateStr) => {
   if (!dateStr) return { dateStr: '', timeStr: '' };
   try {
-    let cleanStr = String(dateStr);
+    let cleanStr = String(dateStr).trim().replace(' ', 'T');
     if (!cleanStr.includes('Z') && !cleanStr.includes('+') && !cleanStr.slice(10).includes('-')) {
       cleanStr = `${cleanStr}+03:00`;
     }
     const d = new Date(cleanStr);
-    const dateStr = d.toLocaleDateString('ru-RU', {
+    if (isNaN(d.getTime())) {
+      const m = String(dateStr).match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+      if (m) {
+        const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+        const day = parseInt(m[3], 10);
+        const mIdx = parseInt(m[2], 10) - 1;
+        return {
+          dateStr: `${day} ${months[mIdx] || ''}`,
+          timeStr: `${m[4]}:${m[5]}`
+        };
+      }
+      return { dateStr: '', timeStr: '' };
+    }
+    const dStr = d.toLocaleDateString('ru-RU', {
       timeZone: 'Europe/Moscow',
       day: 'numeric',
       month: 'short'
     }).replace('.', '');
-    const timeStr = d.toLocaleTimeString('ru-RU', {
+    const tStr = d.toLocaleTimeString('ru-RU', {
       timeZone: 'Europe/Moscow',
       hour: '2-digit',
       minute: '2-digit'
     });
-    return { dateStr, timeStr };
+    return { dateStr: dStr, timeStr: tStr };
   } catch (e) {
     return { dateStr: '', timeStr: '' };
   }

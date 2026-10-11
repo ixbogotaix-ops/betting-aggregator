@@ -33,13 +33,14 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     - Тотал Больше X (ТБ X)
     - Тотал Меньше X (ТМ X)
     - Фора [Команда] (X)
+    - Тайм/Матч: X
+    - Комбинированные ставки
     """
     if not outcome:
         return ""
 
     # Очищаем от суффиксов источников в скобках, например: " (Stavka TV)", " (Legalbet)", " (Vprognoze)", " (BR)"
     raw = re.sub(r'\s*\((?:stavka tv|legalbet|vprognoze|br|betting|tg|statarea|pinnacle)\b.*?\)', '', outcome, flags=re.IGNORECASE)
-    # Убираем завершающие точки, кавычки и пробелы
     raw = raw.strip().rstrip('.').strip()
     out = raw.lower()
 
@@ -53,13 +54,22 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
             return True
         return fuzz.partial_ratio(q_clean, t_clean) > 80
 
-    # 1. Обе забьют (ОЗ)
+    # 1. Тайм / Матч (КРИТИЧЕСКИ ВАЖНО: отделять от ординаров П1/П2!)
+    if any(k in out for k in ["тайм / матч", "тайм/матч", "тайм-матч", "т/м:"]) or re.search(r'\b(н/п1|н/п2|п1/п1|п2/п2|п1/н|п2/н|п1/п2|п2/п1)\b', out):
+        clean_tm = raw.replace('Тайм / Матч -', '').replace('Тайм/Матч -', '').replace('Тайм / Матч —', '').strip()
+        return f"Тайм/Матч: {clean_tm}"
+
+    # 2. Комбинированные ставки: Победа + Тотал / Обе забьют
+    if any(k in out for k in [" и тб", " и тм", " + тб", " + тм", " и оз", " + оз", " и обе забьют"]):
+        return raw.capitalize()
+
+    # 3. Обе забьют (ОЗ)
     if "оз" in out or "обе забьют" in out:
         if any(w in out for w in ["нет", "no", "не забьют", "— нет", "- нет"]):
             return "Обе забьют — Нет (ОЗ: Нет)"
         return "Обе забьют — Да (ОЗ: Да)"
 
-    # 2. Двойной шанс: 1X, X2, 12
+    # 4. Двойной шанс: 1X, X2, 12
     if re.search(r'\b(1x|1х)\b', out) or ("не проиграет" in out and ("1" in out or "хозя" in out or is_team_match(out, home_team))):
         return f"{home_team} не проиграет (1X)" if home_team else "1X (Хозяева не проиграют)"
     if re.search(r'\b(x2|х2)\b', out) or ("не проиграет" in out and ("2" in out or "гост" in out or is_team_match(out, away_team))):
@@ -67,21 +77,11 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     if re.search(r'\b(12)\b', out) or "победа 1 или 2" in out:
         return "Победа 1 или 2 (12)"
 
-    # 3. Ничья
+    # 5. Ничья
     if out in ["draw", "x", "х", "ничья", "х.", "x."] or out.startswith("ничья") or out == "мир":
         return "Ничья (Х)"
 
-    # 4. Тоталы (ТБ / ТМ)
-    tb_match = re.search(r'(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?', out)
-    if tb_match:
-        val = tb_match.group(1).replace(',', '.')
-        return f"Тотал Больше {val} (ТБ {val})"
-    tm_match = re.search(r'(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', out)
-    if tm_match:
-        val = tm_match.group(1).replace(',', '.')
-        return f"Тотал Меньше {val} (ТМ {val})"
-
-    # 5. Форы
+    # 6. Форы (ПРОВЕРЯТЬ ДО П1/П2, чтобы "Фора 2 (-1)" не стала П2!)
     f1_match = re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', out)
     if f1_match:
         val = f1_match.group(1).replace(',', '.')
@@ -91,39 +91,54 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
         val = f2_match.group(1).replace(',', '.')
         return f"Фора {away_team} ({val}) (Ф2)" if away_team else f"Фора 2 ({val})"
 
-    # 6. Победа 2 / Гости / П2 / Away
-    # Примеры: "ПОБЕДА 2", "победа 2.", "п2", "победа гостей", "away_win", "победа: marseille", "победа marseille"
+    # 7. Тоталы (ТБ / ТМ)
+    tb_match = re.search(r'(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?', out)
+    if tb_match:
+        val = tb_match.group(1).replace(',', '.')
+        return f"Тотал Больше {val} (ТБ {val})"
+    tm_match = re.search(r'(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', out)
+    if tm_match:
+        val = tm_match.group(1).replace(',', '.')
+        return f"Тотал Меньше {val} (ТМ {val})"
+    tot_match = re.search(r'тотал\s*(\d+[\.,]?\d*)', out)
+    if tot_match:
+        val = tot_match.group(1).replace(',', '.')
+        return f"Тотал Больше {val} (ТБ {val})"
+
+    # 8. ЧИСТАЯ Победа 2 / Гости (П2)
     if (
-        out in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды"]
-        or out.startswith("победа 2")
-        or out.endswith("п2")
-        or "победа второй" in out
-        or "победа гостей" in out
+        out in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды", "победа второй"]
+        or re.search(r'\b(победа\s*2|победа\s*гостей|победа\s*второй)\b', out)
+        or re.search(r'\(п2\)', out)
+        or re.fullmatch(r'п2[\.\s]*', out)
+        or re.fullmatch(r'w2[\.\s]*', out)
+        or re.fullmatch(r'2[\.\s]*', out)
     ):
         return f"Победа {away_team} (П2)" if away_team else "Победа Гостей (П2)"
 
-    # 7. Победа 1 / Хозяева / П1 / Home
-    # Примеры: "ПОБЕДА 1", "победа 1.", "п1", "победа хозяев", "home_win", "победа: troyes", "победа troyes"
+    # 9. ЧИСТАЯ Победа 1 / Хозяева (П1)
     if (
-        out in ["home_win", "п1", "w1", "1", "победа 1", "победа1", "победа хозяев", "победа первой команды"]
-        or out.startswith("победа 1")
-        or out.endswith("п1")
-        or "победа первой" in out
-        or "победа хозяев" in out
+        out in ["home_win", "п1", "w1", "1", "победа 1", "победа1", "победа хозяев", "победа первой команды", "победа первой"]
+        or re.search(r'\b(победа\s*1|победа\s*хозяев|победа\s*первой)\b', out)
+        or re.search(r'\(п1\)', out)
+        or re.fullmatch(r'п1[\.\s]*', out)
+        or re.fullmatch(r'w1[\.\s]*', out)
+        or re.fullmatch(r'1[\.\s]*', out)
     ):
         return f"Победа {home_team} (П1)" if home_team else "Победа Хозяев (П1)"
 
-    # 8. Явное указание команды в исходе: "Победа: Marseille", "Победа Marseille", "Marseille", "Troyes"
+    # 10. Явное указание команды в исходе: "Победа: Juventus", "Победа Juventus"
     if "победа:" in out or "победа " in out or out.startswith("победа"):
         team_part = out.split(":", 1)[-1].strip() if ":" in out else out.replace("победа", "").strip()
-        if away_team and is_team_match(team_part, away_team):
-            return f"Победа {away_team} (П2)"
-        if home_team and is_team_match(team_part, home_team):
-            return f"Победа {home_team} (П1)"
-        if team_part:
-            return f"Победа {team_part.title()}"
+        if not any(k in team_part for k in ["тотал", "тб", "тм", "тайм", "фора"]):
+            if away_team and is_team_match(team_part, away_team):
+                return f"Победа {away_team} (П2)"
+            if home_team and is_team_match(team_part, home_team):
+                return f"Победа {home_team} (П1)"
+            if team_part:
+                return f"Победа {team_part.title()}"
 
-    # Если исход равен названию одной из команд
+    # Если исход точно равен названию одной из команд
     if away_team and is_team_match(out, away_team):
         return f"Победа {away_team} (П2)"
     if home_team and is_team_match(out, home_team):
