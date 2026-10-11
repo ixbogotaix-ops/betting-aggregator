@@ -134,7 +134,7 @@ function App() {
               ))}
             </div>
           ) : topBets.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
               {topBets.map(bet => (
                 <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
               ))}

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Target, TrendingUp, Users, Shield, Sparkles, ChevronRight, Info } from 'lucide-react';
+import { 
+  Target, TrendingUp, Users, Shield, Sparkles, ChevronRight, 
+  Clock, MessageSquare, Flame 
+} from 'lucide-react';
 import MatchDetailModal from './MatchDetailModal';
 
 const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
@@ -121,28 +124,35 @@ const getRussianSport = (sport) => {
   return 'СПОРТ';
 };
 
-const formatMoscowTime = (dateStr) => {
-  if (!dateStr) return { day: '', time: '' };
+const formatCardMoscowTime = (dateStr) => {
+  if (!dateStr) return { dateStr: '', timeStr: '' };
   try {
     let cleanStr = String(dateStr);
     if (!cleanStr.includes('Z') && !cleanStr.includes('+') && !cleanStr.slice(10).includes('-')) {
       cleanStr = `${cleanStr}+03:00`;
     }
     const d = new Date(cleanStr);
-    const day = d.toLocaleDateString('ru-RU', {
+    const dateStr = d.toLocaleDateString('ru-RU', {
       timeZone: 'Europe/Moscow',
-      month: 'long',
-      day: 'numeric'
-    });
-    const time = d.toLocaleTimeString('ru-RU', {
+      day: 'numeric',
+      month: 'short'
+    }).replace('.', '');
+    const timeStr = d.toLocaleTimeString('ru-RU', {
       timeZone: 'Europe/Moscow',
       hour: '2-digit',
       minute: '2-digit'
     });
-    return { day, time };
+    return { dateStr, timeStr };
   } catch (e) {
-    return { day: '', time: '' };
+    return { dateStr: '', timeStr: '' };
   }
+};
+
+const cleanAiInsight = (text) => {
+  if (!text) return '';
+  let clean = text.replace(/\*\*/g, '').replace(/🔥\s*ИИ-Нейровердикт.*?:/gi, '').trim();
+  clean = clean.replace(/^[:\s-]+/, '').trim();
+  return clean;
 };
 
 const TopBetCard = ({ bet }) => {
@@ -150,16 +160,16 @@ const TopBetCard = ({ bet }) => {
 
   let colorClass = 'bg-accent';
   let textClass = 'text-accent';
-  let shadowClass = 'shadow-blue-500/20 border-accent/20';
+  let borderClass = 'border-blue-500/30';
   
   if (bet.confidence_score >= 80) {
     colorClass = 'bg-success';
     textClass = 'text-success';
-    shadowClass = 'shadow-green-500/20 border-success/20';
+    borderClass = 'border-emerald-500/30';
   } else if (bet.confidence_score < 60) {
     colorClass = 'bg-warning';
     textClass = 'text-warning';
-    shadowClass = 'shadow-yellow-500/20 border-warning/20';
+    borderClass = 'border-amber-500/30';
   }
 
   // Извлекаем названия команд
@@ -168,160 +178,185 @@ const TopBetCard = ({ bet }) => {
     : bet.match_name.split(' - ');
 
   const getLogoUrl = (teamName) => 
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=random&color=fff&size=64&bold=true&rounded=true`;
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=1e293b&color=38bdf8&size=64&bold=true&rounded=true`;
 
   const totalCappersCount = bet.all_predictions?.length || bet.supporting_sources?.length || 0;
-  const mskTime = formatMoscowTime(bet.match_date);
+  const mskTime = formatCardMoscowTime(bet.match_date);
+
+  const sourcesList = (bet.supporting_sources || []).map(s => {
+    return s.replace(/\s*\(Рейтинг:.*?\)/g, '').trim();
+  });
+
+  const cleanInsight = cleanAiInsight(bet.ai_insight);
 
   return (
     <>
       <div 
         onClick={() => setIsModalOpen(true)}
-        className={`bg-card rounded-2xl p-6 border ${shadowClass} shadow-lg hover:-translate-y-2 hover:border-blue-500/40 cursor-pointer transition-all duration-300 relative overflow-hidden group`}
+        className="h-full flex flex-col justify-between bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 rounded-3xl p-5 border border-gray-800 hover:border-blue-500/50 shadow-xl hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1.5 cursor-pointer transition-all duration-300 relative overflow-hidden group select-none"
       >
-        {/* Декоративный фон */}
-        <div className={`absolute top-0 right-0 w-32 h-32 opacity-5 rounded-bl-full ${colorClass}`}></div>
+        {/* Фоновое свечение в верхнем углу */}
+        <div className={`absolute top-0 right-0 w-32 h-32 opacity-10 rounded-bl-full pointer-events-none blur-xl ${colorClass}`}></div>
 
-        <div className="flex justify-between items-start mb-6 relative z-10 gap-2">
-          <div className="flex flex-col gap-2 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+        <div>
+          {/* ВЕРХНЯЯ ШАПКА: Турнир/Страна СЛЕВА, Время СПРАВА */}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-1.5 min-w-0">
               {bet.country_flag_url ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-800/90 text-gray-200 rounded-full text-xs font-bold border border-gray-700 shadow-sm">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-800/90 text-gray-200 rounded-full text-xs font-bold border border-gray-700/80 shadow-sm shrink-0">
                   <img 
                     src={bet.country_flag_url} 
                     alt={bet.country_name || "Country"} 
                     className="w-4 h-3 object-cover rounded-sm shadow-sm inline-block" 
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
-                  <span>{bet.country_name || bet.sport_type}</span>
+                  <span className="truncate max-w-[120px]">{bet.country_name || bet.sport_type}</span>
                 </span>
               ) : (
-                <span className="text-xs font-bold px-3 py-1 bg-gray-800 text-gray-300 rounded-full uppercase tracking-widest border border-gray-700 w-fit whitespace-nowrap">
+                <span className="text-xs font-bold px-2.5 py-1 bg-gray-800/90 text-gray-300 rounded-full border border-gray-700/80 shrink-0">
                   {bet.country_flag_emoji ? `${bet.country_flag_emoji} ` : ''}{bet.sport_type}
                 </span>
               )}
-              <span className="text-[11px] font-semibold px-2 py-0.5 bg-gray-900/80 text-gray-400 rounded-md border border-gray-800 truncate max-w-[150px]">
-                {bet.league}
-              </span>
             </div>
-            {bet.is_bet_of_the_day && (
-              <span className="inline-flex items-center gap-1 text-xs font-extrabold text-yellow-400 bg-yellow-400/10 px-3 py-1 rounded-md border border-yellow-400/30 animate-pulse w-fit whitespace-nowrap">
-                🏆 {getRussianSport(bet.sport_type)} - СТАВКА ДНЯ
-              </span>
+
+            {/* Аккуратная плашка времени по Москве */}
+            {bet.match_date && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-950/90 rounded-xl border border-gray-700/80 text-xs font-black text-gray-200 shrink-0 shadow-inner">
+                <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="whitespace-nowrap">{mskTime.dateStr}, {mskTime.timeStr}</span>
+                <span className="text-[10px] text-blue-400 font-black uppercase tracking-wider">МСК</span>
+              </div>
             )}
           </div>
 
-          {/* Дата и время (Москва) */}
-          {bet.match_date && (
-            <div className="flex flex-col items-center bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-700 shadow-inner shrink-0">
-              <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5 whitespace-nowrap">
-                {mskTime.day}
+          {/* ПОДШАПКА: Статус "Ставка Дня" + Лига */}
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            {bet.is_bet_of_the_day && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-400/30 shadow-sm animate-pulse">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>СТАВКА ДНЯ</span>
+                <span className="text-amber-500/60">•</span>
+                <span className="text-amber-200 font-semibold">{getRussianSport(bet.sport_type)}</span>
               </span>
-              <span className="text-xl font-black text-white leading-none">
-                {mskTime.time}
+            )}
+            <span className="text-[11px] font-semibold text-gray-400 px-2.5 py-0.5 bg-gray-800/60 rounded-md border border-gray-800 truncate max-w-[170px]">
+              {bet.league}
+            </span>
+          </div>
+
+          {/* БЛОК ПРОТИВОСТОЯНИЯ (Эмблемы и Названия с единой сеткой) */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-3 bg-gray-950/50 rounded-2xl border border-gray-800/70 mb-4">
+            {/* Хозяева */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 p-2 bg-gray-850 rounded-2xl flex items-center justify-center mb-1.5 ring-1 ring-gray-700 shadow-md group-hover:ring-blue-500/50 group-hover:scale-105 transition-all">
+                <img 
+                  src={bet.home_logo || getLogoUrl(homeTeam)} 
+                  alt={homeTeam} 
+                  className="max-w-full max-h-full object-contain filter drop-shadow-md"
+                  onError={(e) => { e.currentTarget.src = getLogoUrl(homeTeam); }}
+                />
+              </div>
+              <span className="text-xs font-bold text-white leading-tight min-h-[2.4rem] flex items-center justify-center line-clamp-2 px-1">
+                {homeTeam}
               </span>
-              <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest mt-0.5">
-                МСК
+              <span className="text-[10px] text-gray-500 font-semibold mt-0.5">Хозяева</span>
+            </div>
+
+            {/* Разделитель VS */}
+            <div className="flex flex-col items-center justify-center">
+              <span className="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] font-black text-gray-400 italic shadow-inner">
+                VS
               </span>
+            </div>
+
+            {/* Гости */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 p-2 bg-gray-850 rounded-2xl flex items-center justify-center mb-1.5 ring-1 ring-gray-700 shadow-md group-hover:ring-purple-500/50 group-hover:scale-105 transition-all">
+                <img 
+                  src={bet.away_logo || getLogoUrl(awayTeam)} 
+                  alt={awayTeam} 
+                  className="max-w-full max-h-full object-contain filter drop-shadow-md"
+                  onError={(e) => { e.currentTarget.src = getLogoUrl(awayTeam); }}
+                />
+              </div>
+              <span className="text-xs font-bold text-white leading-tight min-h-[2.4rem] flex items-center justify-center line-clamp-2 px-1">
+                {awayTeam}
+              </span>
+              <span className="text-[10px] text-gray-500 font-semibold mt-0.5">Гости</span>
+            </div>
+          </div>
+
+          {/* КОНСЕНСУС КАППЕРОВ */}
+          <div className="mb-4 p-3 bg-gray-950/50 rounded-xl border border-gray-800/80">
+            <div className="flex justify-between items-center text-xs mb-1.5">
+              <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-blue-400" />
+                <span>Консенсус экспертов</span>
+                {totalCappersCount > 0 && (
+                  <span className="text-gray-500 text-[11px]">({totalCappersCount})</span>
+                )}
+              </span>
+              <span className={`font-black text-sm ${textClass}`}>{bet.confidence_score}%</span>
+            </div>
+            <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${colorClass} transition-all duration-1000 ease-out`} 
+                style={{ width: `${Math.min(bet.confidence_score, 100)}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {/* РЕКОМЕНДУЕМЫЙ ИСХОД И КЭФ (Широкий, удобный, без сжатия) */}
+          <div className="p-3.5 bg-gradient-to-br from-blue-950/40 via-indigo-950/20 to-gray-900 rounded-2xl border border-blue-500/30 mb-3 shadow-inner">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-blue-300 flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-blue-400" />
+                <span>Рекомендуемый исход</span>
+              </span>
+              <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-sm rounded-lg shadow-sm">
+                КЭФ {bet.average_odds.toFixed(2)}
+              </span>
+            </div>
+            <div className="font-black text-white text-base leading-snug">
+              {formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}
+            </div>
+          </div>
+
+          {/* ИСТОЧНИКИ */}
+          {sourcesList.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-950/40 px-3 py-2 rounded-xl mb-3 border border-gray-800/60">
+              <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <p className="truncate text-[11px]">
+                <strong className="text-gray-300 font-semibold">Подтверждено:</strong> {sourcesList.slice(0, 3).join(', ')}{sourcesList.length > 3 ? ` +${sourcesList.length - 3}` : ''}
+              </p>
+            </div>
+          )}
+
+          {/* ИИ ВЫЖИМКА */}
+          {cleanInsight && (
+            <div className="p-3 bg-gradient-to-r from-purple-950/20 via-blue-950/15 to-gray-900/40 rounded-xl border border-purple-500/20 mb-3 text-xs leading-relaxed">
+              <div className="flex items-center gap-1.5 text-purple-400 font-bold text-[11px] mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>ИИ-анализ</span>
+              </div>
+              <p className="line-clamp-2 italic text-gray-300 text-[11px]">
+                «{cleanInsight}»
+              </p>
             </div>
           )}
         </div>
 
-        {/* Versus Layout с реальными эмблемами команд */}
-        <div className="flex items-center justify-between mb-6 gap-2">
-          <div className="flex flex-col items-center flex-1 text-center">
-            <div className="w-14 h-14 p-1.5 bg-gray-800/80 rounded-2xl flex items-center justify-center mb-2 ring-2 ring-gray-700/60 group-hover:ring-blue-500/50 group-hover:scale-105 transition-all shadow-md">
-              <img 
-                src={bet.home_logo || getLogoUrl(homeTeam)} 
-                alt={homeTeam} 
-                className="max-w-full max-h-full object-contain filter drop-shadow-md"
-                onError={(e) => { 
-                  e.currentTarget.src = getLogoUrl(homeTeam); 
-                }}
-              />
-            </div>
-            <span className="text-sm font-bold text-gray-200 line-clamp-2 leading-tight">{homeTeam}</span>
-          </div>
-          
-          <div className="flex flex-col items-center justify-center px-2">
-            <span className="text-xs font-black text-gray-600 italic">VS</span>
-          </div>
-
-          <div className="flex flex-col items-center flex-1 text-center">
-            <div className="w-14 h-14 p-1.5 bg-gray-800/80 rounded-2xl flex items-center justify-center mb-2 ring-2 ring-gray-700/60 group-hover:ring-purple-500/50 group-hover:scale-105 transition-all shadow-md">
-              <img 
-                src={bet.away_logo || getLogoUrl(awayTeam)} 
-                alt={awayTeam} 
-                className="max-w-full max-h-full object-contain filter drop-shadow-md"
-                onError={(e) => { 
-                  e.currentTarget.src = getLogoUrl(awayTeam); 
-                }}
-              />
-            </div>
-            <span className="text-sm font-bold text-gray-200 line-clamp-2 leading-tight">{awayTeam}</span>
-          </div>
-        </div>
-
-        {/* Уверенность алгоритма */}
-        <div className="mb-5 bg-dark/50 p-3 rounded-xl border border-gray-800/50">
-          <div className="flex justify-between text-xs mb-2">
-            <span className="text-gray-400 font-medium">Консенсус Капперов</span>
-            <span className={`font-black ${textClass}`}>{bet.confidence_score}%</span>
-          </div>
-          <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-            <div 
-              className={`h-full ${colorClass} transition-all duration-1000 ease-out`} 
-              style={{ width: `${bet.confidence_score}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Исход с коэффициентом */}
-        <div className={`flex items-center justify-between p-4 rounded-xl mb-4 border ${shadowClass.replace('shadow-', 'bg-').replace('/20', '/5')}`}>
-          <div className="flex items-center gap-4">
-            <div className={`p-2 rounded-lg ${colorClass} bg-opacity-20 shrink-0`}>
-              <Target className={`w-6 h-6 ${textClass}`} />
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-1">Исход</p>
-              <p className="font-extrabold text-white text-base leading-tight">{formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}</p>
-            </div>
-          </div>
-          
-          <div className="text-right pl-4 border-l border-gray-700/50 shrink-0">
-            <div className="text-2xl font-black text-white">{bet.average_odds.toFixed(2)}</div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-0.5">КЭФ</p>
-          </div>
-        </div>
-
-        {/* Сводка источников */}
-        <div className="flex items-start gap-3 text-xs text-gray-400 bg-gray-900/50 p-3 rounded-lg mb-3">
-          <Shield className="w-4 h-4 mt-0.5 shrink-0 text-gray-500" />
-          <p className="leading-relaxed line-clamp-2">
-            <span className="font-semibold text-gray-300">Подтверждено:</span> {bet.supporting_sources.join(', ')}
-          </p>
-        </div>
-
-        {/* ИИ инсайт превью */}
-        {bet.ai_insight && (
-          <div className="p-3 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-xl border border-blue-500/20 relative overflow-hidden mb-3">
-            <p className="text-xs text-gray-200 leading-relaxed italic line-clamp-2">
-              <span className="font-bold text-blue-400 mr-1.5">ИИ:</span> 
-              {bet.ai_insight}
-            </p>
-          </div>
-        )}
-
-        {/* Кнопка "Полный разбор" */}
+        {/* КНОПКА ПОЛНОГО РАЗБОРА (Всегда прибита к низу карточки) */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             setIsModalOpen(true);
           }}
-          className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-blue-600/20 to-indigo-600/20 hover:from-blue-600/30 hover:to-indigo-600/30 text-blue-300 hover:text-white rounded-xl border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-1.5 group-hover:border-blue-400/50 shadow-sm"
+          className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-blue-600/20 via-indigo-600/25 to-blue-600/20 hover:from-blue-600/40 hover:to-indigo-600/40 text-blue-300 hover:text-white rounded-xl border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-2 group-hover:border-blue-400/60 shadow-md"
         >
-          <span>💬 Мысли капперов и полный разбор ({totalCappersCount})</span>
-          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          <MessageSquare className="w-4 h-4 text-blue-400" />
+          <span>Мысли капперов и полный разбор ({totalCappersCount})</span>
+          <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
 
