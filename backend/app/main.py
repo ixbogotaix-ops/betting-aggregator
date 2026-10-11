@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -17,7 +17,12 @@ app = FastAPI(title="Betting Aggregator API")
 # Настройка CORS для фронтенда на React/Vite
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://45.84.222.76",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -341,4 +346,71 @@ async def trigger_super_consensus_alerts(db: AsyncSession = Depends(get_db)):
         
     sent_count = await check_and_notify_super_consensus(top_bets)
     return {"status": "ok", "sent_alerts_count": sent_count}
+
+# --- АВТОРИЗАЦИЯ ЧЕРЕЗ GOOGLE ---
+
+@app.post("/api/auth/google", response_model=schemas.AuthResponse)
+async def login_with_google(req: schemas.GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Аутентификация через Google Identity Services (One Tap или Google Sign-In Button).
+    Верифицирует токен с серверами Google и создает/обновляет аккаунт пользователя.
+    """
+    from .auth_service import verify_google_id_token, authenticate_or_register_google_user, create_access_token
+    
+    if req.demo:
+        # Тестовый демо-вход (пока пользователь настраивает свой Client ID в Google Cloud)
+        google_info = {
+            "google_id": "demo_google_id_9999",
+            "email": "demo.user@sports-ai.com",
+            "name": "Аналитик AI (Демо)",
+            "picture": "https://api.dicebear.com/7.x/bottts/svg?seed=SportsAI",
+            "email_verified": True
+        }
+    else:
+        if not req.credential:
+            raise HTTPException(status_code=400, detail="Отсутствует Google токен авторизации (credential)")
+            
+        google_info = verify_google_id_token(req.credential)
+        if not google_info:
+            raise HTTPException(status_code=401, detail="Недействительный или просроченный токен Google")
+            
+    user = await authenticate_or_register_google_user(db, google_info)
+    token = create_access_token(user.id, user.email, user.role)
+    
+    return schemas.AuthResponse(
+        access_token=token,
+        token_type="bearer",
+        user=schemas.UserResponse.model_validate(user)
+    )
+
+@app.get("/api/auth/me", response_model=schemas.UserResponse)
+async def get_current_user_profile(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Возвращает профиль текущего авторизованного пользователя.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+        
+    token = authorization.replace("Bearer ", "").strip()
+    from .auth_service import verify_access_token
+    payload = verify_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Токен авторизации недействителен или истек")
+        
+    user_id = int(payload["sub"])
+    stmt = select(models.User).where(models.User.id == user_id)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+    return schemas.UserResponse.model_validate(user)
+
+@app.post("/api/auth/logout")
+async def logout():
+    return {"status": "ok", "message": "Успешный выход из системы"}
 

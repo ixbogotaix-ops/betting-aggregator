@@ -110,3 +110,67 @@ export const sendSuperAlerts = async () => {
   }
 };
 
+// --- AUTH API ---
+
+// Прикрепляем токен к каждому запросу, если он сохранен
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export const loginWithGoogle = async (credential) => {
+  try {
+    const response = await api.post('/auth/google', { credential });
+    if (response.data.access_token) {
+      localStorage.setItem('auth_token', response.data.access_token);
+      localStorage.setItem('auth_user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  } catch (error) {
+    console.error("Error logging in with Google:", error);
+    throw error;
+  }
+};
+
+export const loginWithDemo = async () => {
+  try {
+    const response = await api.post('/auth/google', { demo: true });
+    if (response.data.access_token) {
+      localStorage.setItem('auth_token', response.data.access_token);
+      localStorage.setItem('auth_user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  } catch (error) {
+    console.error("Error demo login:", error);
+    throw error;
+  }
+};
+
+export const getCurrentUser = async () => {
+  try {
+    const response = await api.get('/auth/me');
+    localStorage.setItem('auth_user', JSON.stringify(response.data));
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching current user:", error);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    return null;
+  }
+};
+
+export const logoutUser = async () => {
+  try {
+    await api.post('/auth/logout');
+  } catch (e) {
+    // ignore
+  } finally {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+  }
+};
+
+

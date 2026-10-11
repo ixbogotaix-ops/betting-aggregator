@@ -171,4 +171,24 @@ class ParlayCard(BaseModel):
 
 class DailyParlaysResponse(BaseModel):
     safe_parlay: Optional[ParlayCard] = None
-    hot_parlay: Optional[ParlayCard] = None 
+    hot_parlay: Optional[ParlayCard] = None
+
+class GoogleAuthRequest(BaseModel):
+    credential: Optional[str] = None
+    demo: Optional[bool] = False
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    name: Optional[str] = None
+    picture: Optional[str] = None
+    role: str = "user"
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
