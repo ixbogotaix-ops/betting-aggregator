@@ -108,12 +108,21 @@ def get_team_logo(team_name: str, sport: str = "") -> str:
     if clean_key in _LOGO_CACHE:
         return _LOGO_CACHE[clean_key]
 
-    # 3. Запрос в бесплатное API TheSportsDB
+    # Пропускаем сетевой поиск для бойцов MMA/UFC и теннисистов (у них нет командных эмблем)
+    s_low = (sport or "").lower()
+    if any(x in s_low for x in ["mma", "ufc", "tennis", "теннис", "martial"]):
+        fallback_url = f"https://ui-avatars.com/api/?name={urllib.parse.quote(team_name)}&background=1e293b&color=38bdf8&size=128&bold=true&rounded=true"
+        _LOGO_CACHE[clean_key] = fallback_url
+        return fallback_url
+
+    # 3. Быстрый запрос в бесплатное API TheSportsDB (таймаут 1.0 сек)
     try:
-        query = urllib.parse.quote(team_name.split()[-1] if len(team_name.split()) > 2 else team_name)
+        parts = team_name.split()
+        query_word = parts[-1] if len(parts) > 1 else team_name
+        query = urllib.parse.quote(query_word)
         url = f"https://www.thesportsdb.com/api/v1/json/123/searchteams.php?t={query}"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=1.0) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             if data and data.get("teams"):
                 badge = data["teams"][0].get("strBadge")
