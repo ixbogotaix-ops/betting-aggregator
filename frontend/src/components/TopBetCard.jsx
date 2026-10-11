@@ -87,11 +87,28 @@ const TopBetCard = ({ bet }) => {
         {/* Декоративный фон */}
         <div className={`absolute top-0 right-0 w-32 h-32 opacity-5 rounded-bl-full ${colorClass}`}></div>
 
-        <div className="flex justify-between items-start mb-6 relative z-10">
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-bold px-3 py-1 bg-gray-800 text-gray-300 rounded-full uppercase tracking-widest border border-gray-700 w-fit whitespace-nowrap">
-              {bet.sport_type}
-            </span>
+        <div className="flex justify-between items-start mb-6 relative z-10 gap-2">
+          <div className="flex flex-col gap-2 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              {bet.country_flag_url ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-800/90 text-gray-200 rounded-full text-xs font-bold border border-gray-700 shadow-sm">
+                  <img 
+                    src={bet.country_flag_url} 
+                    alt={bet.country_name || "Country"} 
+                    className="w-4 h-3 object-cover rounded-sm shadow-sm inline-block" 
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span>{bet.country_name || bet.sport_type}</span>
+                </span>
+              ) : (
+                <span className="text-xs font-bold px-3 py-1 bg-gray-800 text-gray-300 rounded-full uppercase tracking-widest border border-gray-700 w-fit whitespace-nowrap">
+                  {bet.country_flag_emoji ? `${bet.country_flag_emoji} ` : ''}{bet.sport_type}
+                </span>
+              )}
+              <span className="text-[11px] font-semibold px-2 py-0.5 bg-gray-900/80 text-gray-400 rounded-md border border-gray-800 truncate max-w-[150px]">
+                {bet.league}
+              </span>
+            </div>
             {bet.is_bet_of_the_day && (
               <span className="inline-flex items-center gap-1 text-xs font-extrabold text-yellow-400 bg-yellow-400/10 px-3 py-1 rounded-md border border-yellow-400/30 animate-pulse w-fit whitespace-nowrap">
                 🏆 {getRussianSport(bet.sport_type)} - СТАВКА ДНЯ
@@ -101,7 +118,7 @@ const TopBetCard = ({ bet }) => {
 
           {/* Дата и время (Москва) */}
           {bet.match_date && (
-            <div className="flex flex-col items-center bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-700 shadow-inner">
+            <div className="flex flex-col items-center bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-700 shadow-inner shrink-0">
               <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5 whitespace-nowrap">
                 {mskTime.day}
               </span>
@@ -115,10 +132,19 @@ const TopBetCard = ({ bet }) => {
           )}
         </div>
 
-        {/* Versus Layout с логотипами */}
+        {/* Versus Layout с реальными эмблемами команд */}
         <div className="flex items-center justify-between mb-6 gap-2">
           <div className="flex flex-col items-center flex-1 text-center">
-            <img src={getLogoUrl(homeTeam)} alt={homeTeam} className="w-12 h-12 rounded-full mb-2 ring-2 ring-gray-800 group-hover:ring-blue-500/40 transition-all" />
+            <div className="w-14 h-14 p-1.5 bg-gray-800/80 rounded-2xl flex items-center justify-center mb-2 ring-2 ring-gray-700/60 group-hover:ring-blue-500/50 group-hover:scale-105 transition-all shadow-md">
+              <img 
+                src={bet.home_logo || getLogoUrl(homeTeam)} 
+                alt={homeTeam} 
+                className="max-w-full max-h-full object-contain filter drop-shadow-md"
+                onError={(e) => { 
+                  e.currentTarget.src = getLogoUrl(homeTeam); 
+                }}
+              />
+            </div>
             <span className="text-sm font-bold text-gray-200 line-clamp-2 leading-tight">{homeTeam}</span>
           </div>
           
@@ -127,7 +153,16 @@ const TopBetCard = ({ bet }) => {
           </div>
 
           <div className="flex flex-col items-center flex-1 text-center">
-            <img src={getLogoUrl(awayTeam)} alt={awayTeam} className="w-12 h-12 rounded-full mb-2 ring-2 ring-gray-800 group-hover:ring-purple-500/40 transition-all" />
+            <div className="w-14 h-14 p-1.5 bg-gray-800/80 rounded-2xl flex items-center justify-center mb-2 ring-2 ring-gray-700/60 group-hover:ring-purple-500/50 group-hover:scale-105 transition-all shadow-md">
+              <img 
+                src={bet.away_logo || getLogoUrl(awayTeam)} 
+                alt={awayTeam} 
+                className="max-w-full max-h-full object-contain filter drop-shadow-md"
+                onError={(e) => { 
+                  e.currentTarget.src = getLogoUrl(awayTeam); 
+                }}
+              />
+            </div>
             <span className="text-sm font-bold text-gray-200 line-clamp-2 leading-tight">{awayTeam}</span>
           </div>
         </div>

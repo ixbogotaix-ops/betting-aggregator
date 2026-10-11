@@ -99,6 +99,13 @@ class TopBetResponse(BaseModel):
     tactical_analysis: Optional[str] = None
     key_factors: List[str] = []
     h2h_summary: Optional[str] = None
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    home_logo: Optional[str] = None
+    away_logo: Optional[str] = None
+    country_name: Optional[str] = None
+    country_flag_url: Optional[str] = None
+    country_flag_emoji: Optional[str] = None
     all_predictions: List[TopBetPredictionDetail] = []
   
 class SourceStatusResponse(BaseModel):  

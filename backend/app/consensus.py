@@ -14,6 +14,7 @@ from app.analytics_engine import (
     generate_ai_insight,
     generate_cappers_consensus_reasoning
 )
+from app.logo_service import get_team_logo, get_league_country
 
 def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") -> str:
     """Приводит разные форматы исходов от разных парсеров к единому стандарту для консенсуса"""
@@ -215,6 +216,11 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 best_sources, best_outcome, round(best_avg_odds, 2)
             )
 
+            # Эмблемы команд и флаг страны
+            h_logo = get_team_logo(match.home_team, match.sport_type)
+            a_logo = get_team_logo(match.away_team, match.sport_type)
+            country_info = get_league_country(match.league, match.sport_type)
+
             top_bets.append(TopBetResponse(
                 match_id=match.id,
                 match_name=f"{match.home_team} vs {match.away_team}",
@@ -231,6 +237,13 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 tactical_analysis=tactical,
                 key_factors=factors,
                 h2h_summary=h2h,
+                home_team=match.home_team,
+                away_team=match.away_team,
+                home_logo=h_logo,
+                away_logo=a_logo,
+                country_name=country_info.get("name"),
+                country_flag_url=country_info.get("flag_url"),
+                country_flag_emoji=country_info.get("emoji"),
                 all_predictions=detailed_preds
             ))
 

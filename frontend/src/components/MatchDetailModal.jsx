@@ -95,10 +95,22 @@ const MatchDetailModal = ({ bet, onClose }) => {
         {/* Шапка модалки */}
         <div className="p-6 bg-gradient-to-b from-gray-800/70 via-gray-850 to-gray-900 border-b border-gray-800 shrink-0">
           <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="text-xs font-bold px-3 py-1 bg-blue-500/15 text-blue-400 rounded-full border border-blue-500/30 uppercase tracking-wider">
-              {bet.sport_type}
-            </span>
-            <span className="text-xs font-semibold px-2.5 py-0.5 bg-gray-800 text-gray-300 rounded-md border border-gray-700">
+            {bet.country_flag_url ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-800/90 text-gray-200 rounded-full text-xs font-bold border border-gray-700 shadow-sm">
+                <img 
+                  src={bet.country_flag_url} 
+                  alt={bet.country_name || "Country"} 
+                  className="w-4 h-3 object-cover rounded-sm shadow-sm inline-block" 
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+                <span>{bet.country_name || bet.sport_type}</span>
+              </span>
+            ) : (
+              <span className="text-xs font-bold px-3 py-1 bg-blue-500/15 text-blue-400 rounded-full border border-blue-500/30 uppercase tracking-wider">
+                {bet.country_flag_emoji ? `${bet.country_flag_emoji} ` : ''}{bet.sport_type}
+              </span>
+            )}
+            <span className="text-xs font-semibold px-2.5 py-1 bg-gray-800 text-gray-300 rounded-md border border-gray-700">
               {bet.league}
             </span>
             {bet.is_bet_of_the_day && (
@@ -108,10 +120,17 @@ const MatchDetailModal = ({ bet, onClose }) => {
             )}
           </div>
 
-          {/* Команды и время матча */}
+          {/* Команды и время матча с эмблемами */}
           <div className="flex items-center justify-between gap-4 mt-3">
             <div className="flex flex-col items-center flex-1 text-center">
-              <img src={getLogoUrl(homeTeam)} alt={homeTeam} className="w-16 h-16 rounded-full mb-2 ring-2 ring-blue-500/40 shadow-lg object-cover" />
+              <div className="w-20 h-20 p-2 bg-gray-800/90 rounded-3xl flex items-center justify-center mb-2 ring-2 ring-blue-500/40 shadow-xl">
+                <img 
+                  src={bet.home_logo || getLogoUrl(homeTeam)} 
+                  alt={homeTeam} 
+                  className="max-w-full max-h-full object-contain filter drop-shadow-lg"
+                  onError={(e) => { e.currentTarget.src = getLogoUrl(homeTeam); }}
+                />
+              </div>
               <h3 className="font-bold text-white text-base leading-tight">{homeTeam}</h3>
               <span className="text-[11px] text-gray-400 mt-0.5">Хозяева</span>
             </div>
@@ -132,7 +151,14 @@ const MatchDetailModal = ({ bet, onClose }) => {
             </div>
 
             <div className="flex flex-col items-center flex-1 text-center">
-              <img src={getLogoUrl(awayTeam)} alt={awayTeam} className="w-16 h-16 rounded-full mb-2 ring-2 ring-purple-500/40 shadow-lg object-cover" />
+              <div className="w-20 h-20 p-2 bg-gray-800/90 rounded-3xl flex items-center justify-center mb-2 ring-2 ring-purple-500/40 shadow-xl">
+                <img 
+                  src={bet.away_logo || getLogoUrl(awayTeam)} 
+                  alt={awayTeam} 
+                  className="max-w-full max-h-full object-contain filter drop-shadow-lg"
+                  onError={(e) => { e.currentTarget.src = getLogoUrl(awayTeam); }}
+                />
+              </div>
               <h3 className="font-bold text-white text-base leading-tight">{awayTeam}</h3>
               <span className="text-[11px] text-gray-400 mt-0.5">Гости</span>
             </div>
