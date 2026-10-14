@@ -69,6 +69,8 @@ class MatchCreate(MatchBase):
 class MatchResponse(MatchBase):
     id: int
     predictions: List[PredictionResponse] = []
+    home_logo: Optional[str] = None
+    away_logo: Optional[str] = None
 
     class Config:
         from_attributes = True

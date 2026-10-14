@@ -53,9 +53,22 @@ async def create_match(match: schemas.MatchCreate, db: AsyncSession = Depends(ge
 
 @app.get("/api/matches/", response_model=List[schemas.MatchResponse])
 async def get_matches(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(models.Match).offset(skip).limit(limit))
+    result = await db.execute(
+        select(models.Match)
+        .options(selectinload(models.Match.predictions).selectinload(models.Prediction.source))
+        .offset(skip)
+        .limit(limit)
+    )
     matches = result.scalars().all()
-    return matches
+
+    from .logo_service import get_team_logo
+    response_list = []
+    for m in matches:
+        m_dict = schemas.MatchResponse.model_validate(m).model_dump()
+        m_dict["home_logo"] = get_team_logo(m.home_team, m.sport_type)
+        m_dict["away_logo"] = get_team_logo(m.away_team, m.sport_type)
+        response_list.append(schemas.MatchResponse(**m_dict))
+    return response_list
 
 # --- Эндпоинты для прогнозов ---
 
