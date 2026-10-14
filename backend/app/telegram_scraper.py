@@ -123,19 +123,47 @@ class TelegramChannelParser:
         odds = float(odds_match.group(1)) if odds_match else None
         
         outcome = None
-        text_upper = text.upper()
-        if "П1" in text_upper or "ПОБЕДА 1" in text_upper: outcome = "Победа Хозяев (П1)"
-        elif "П2" in text_upper or "ПОБЕДА 2" in text_upper: outcome = "Победа Гостей (П2)"
-        elif "НИЧЬЯ" in text_upper or " Х " in text_upper: outcome = "Ничья (Х)"
-        elif "ТБ 2.5" in text_upper or "ТОТАЛ БОЛЬШЕ 2.5" in text_upper: outcome = "Тотал Больше (2.5)"
-        elif "ТМ 2.5" in text_upper or "ТОТАЛ МЕНЬШЕ 2.5" in text_upper: outcome = "Тотал Меньше (2.5)"
-        elif "ОЗ" in text_upper or "ОБЕ ЗАБЬЮТ" in text_upper: outcome = "Обе забьют - Да"
-        elif "Ф1" in text_upper:
-            m = re.search(r'Ф1\s*\(([^)]+)\)', text_upper)
-            outcome = f"Фора 1 ({m.group(1)})" if m else "Фора 1"
-        elif "Ф2" in text_upper:
-            m = re.search(r'Ф2\s*\(([^)]+)\)', text_upper)
-            outcome = f"Фора 2 ({m.group(1)})" if m else "Фора 2"
+        text_clean = text.strip()
+
+        # 1. Приоритет: Обе забьют (ОЗ)
+        if re.search(r'\b(оз\s*[-—:]?\s*нет|обе\s*забьют\s*[-—:]?\s*нет|не\s*забьют)\b', text_clean, re.I):
+            outcome = "Обе забьют — Нет (ОЗ: Нет)"
+        elif re.search(r'\b(оз\s*[-—:]?\s*да|обе\s*забьют\s*[-—:]?\s*да|обе\s*забьют|\bоз\b)\b', text_clean, re.I):
+            outcome = "Обе забьют — Да (ОЗ: Да)"
+
+        # 2. Приоритет: Тоталы (Любые: ТБ 1.5, ТБ 2, ТБ 2.5, ТБ 3, ТМ 2.5, ТМ 3.5 и т.д.)
+        elif re.search(r'(?:тб|тотал\s*больше|over)\s*\(?(\d+[\.,]?\d*)\)?', text_clean, re.I):
+            m = re.search(r'(?:тб|тотал\s*больше|over)\s*\(?(\d+[\.,]?\d*)\)?', text_clean, re.I)
+            v = m.group(1).replace(',', '.')
+            outcome = f"Тотал Больше {v} (ТБ {v})"
+        elif re.search(r'(?:тм|тотал\s*меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', text_clean, re.I):
+            m = re.search(r'(?:тм|тотал\s*меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', text_clean, re.I)
+            v = m.group(1).replace(',', '.')
+            outcome = f"Тотал Меньше {v} (ТМ {v})"
+
+        # 3. Приоритет: Двойной шанс (Максимальная надежность: 1X, X2, 12)
+        elif re.search(r'\b(1x|1х)\b', text_clean, re.I) or re.search(r'\b1\s*не\s*проиграет\b', text_clean, re.I):
+            outcome = "1X (Хозяева не проиграют)"
+        elif re.search(r'\b(x2|х2)\b', text_clean, re.I) or re.search(r'\b2\s*не\s*проиграет\b', text_clean, re.I):
+            outcome = "X2 (Гости не проиграют)"
+        elif re.search(r'\b(12)\b', text_clean, re.I) or "победа 1 или 2" in text_clean.lower():
+            outcome = "Победа 1 или 2 (12)"
+
+        # 4. Приоритет: Форы
+        elif re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', text_clean, re.I):
+            m = re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', text_clean, re.I)
+            outcome = f"Фора 1 ({m.group(1).replace(',', '.')})"
+        elif re.search(r'(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', text_clean, re.I):
+            m = re.search(r'(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', text_clean, re.I)
+            outcome = f"Фора 2 ({m.group(1).replace(',', '.')})"
+
+        # 5. И только затем: Ничья, П1, П2 (с четкими границами слов)
+        elif re.search(r'\b(ничья|draw|мир)\b', text_clean, re.I):
+            outcome = "Ничья (Х)"
+        elif re.search(r'\b(п1|победа\s*1|победа\s*хозяев|победа\s*первой)\b', text_clean, re.I):
+            outcome = "Победа Хозяев (П1)"
+        elif re.search(r'\b(п2|победа\s*2|победа\s*гостей|победа\s*второй)\b', text_clean, re.I):
+            outcome = "Победа Гостей (П2)"
 
         best_match = None
         highest_score = 0

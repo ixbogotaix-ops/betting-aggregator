@@ -149,14 +149,48 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
 def calculate_odds_multiplier(odds: float) -> float:
     """
     Пенализация слишком низких коэффициентов (мало пользы).
-    В ставках от реальных капперов обычно играют ординары от 1.60 до 2.20.
+    В ставках от реальных капперов обычно играют ординары от 1.50 до 2.20.
     """
-    if odds < 1.40:
-        return 0.5  # Штраф за верняки
-    elif odds >= 1.60 and odds <= 2.20:
+    if odds < 1.35:
+        return 0.6  # Штраф за слишком мизерные кэфы
+    elif odds >= 1.50 and odds <= 2.20:
         return 1.15 # Бонус за оптимальный диапазон капперов
-    elif odds > 3.50:
-        return 0.8  # Легкий штраф за риск
+    elif odds > 3.20:
+        return 0.8  # Легкий штраф за повышенный риск
+    return 1.0
+
+def calculate_passability_multiplier(outcome: str, odds: float) -> float:
+    """
+    Рассчитывает множитель математической проходимости (Win Rate).
+    В беттинге ставки с закрытием 2 из 3 исходов (1X, X2, Фора 0, Фора +1.5)
+    и надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5) статистически проходят в 75-88% случаев,
+    в то время как чистая победа П1 / П2 на фаворита часто срывается ничьей.
+    """
+    if not outcome:
+        return 1.0
+    out_low = outcome.lower()
+
+    # 1. Двойной шанс (1X, X2) - максимальная проходимость (78-88%)!
+    if any(k in out_low for k in ["1x", "1х", "x2", "х2", "не проиграет", "двойной"]):
+        return 1.35
+
+    # 2. Мягкие надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5, ТМ 4)
+    if any(k in out_low for k in ["тб 1.5", "тб 1", "тб 2", "тм 3.5", "тм 4", "тм 4.5"]):
+        return 1.25
+
+    # 3. Форы с подстраховкой ничьей (0, +1, +1.5)
+    if any(k in out_low for k in ["(0)", "(+1", "(+1.5", "(+2"]):
+        return 1.25
+
+    # 4. Обе забьют (ОЗ: Да)
+    if "обе забьют — да" in out_low or "оз: да" in out_low or "обе забьют - да" in out_low:
+        return 1.15
+
+    # 5. Стандартные тоталы (ТБ 2.5, ТМ 2.5)
+    if "тб 2.5" in out_low or "тм 2.5" in out_low or "тотал" in out_low:
+        return 1.10
+
+    # 6. Чистая победа (П1 / П2) - базовый множитель 1.0
     return 1.0
 
 def get_generic_sport(s: str) -> str:
@@ -280,8 +314,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
 
             avg_odds = total_odds / len(preds)
             
-            # Применяем множитель коэффициента
-            final_score = raw_score * calculate_odds_multiplier(avg_odds)
+            # Применяем множитель коэффициента и бонус математической надежности (проходимости)
+            final_score = raw_score * calculate_odds_multiplier(avg_odds) * calculate_passability_multiplier(outcome, avg_odds)
             
             # БОНУС ЗА КОНСЕНСУС: Если сразу несколько ТОП-капперов дали этот прогноз
             if len(preds) > 1:
