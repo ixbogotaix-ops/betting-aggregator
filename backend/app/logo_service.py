@@ -105,6 +105,9 @@ KNOWN_TEAM_LOGOS = {
     "lyon": "https://a.espncdn.com/i/teamlogos/soccer/500/167.png",
     "lille": "https://a.espncdn.com/i/teamlogos/soccer/500/166.png",
     "rennes": "https://a.espncdn.com/i/teamlogos/soccer/500/171.png",
+    "troyes": "https://r2.thesportsdb.com/images/media/team/badge/sl5kzg1766617559.png",
+    "rc lens": "https://r2.thesportsdb.com/images/media/team/badge/3pxoum1598797195.png",
+    "lens": "https://r2.thesportsdb.com/images/media/team/badge/3pxoum1598797195.png",
 
     # Нидерланды, Австрия, Турция, прочие футбольные
     "feyenoord": "https://r2.thesportsdb.com/images/media/team/badge/uturtx1473534803.png",
@@ -127,6 +130,9 @@ KNOWN_TEAM_LOGOS = {
     "paris basketball": "https://r2.thesportsdb.com/images/media/team/badge/9q0d6x1726681476.png",
     "virtus bologna": "https://r2.thesportsdb.com/images/media/team/badge/kqfwqq1659402893.png",
     "virtus segafredo bologna": "https://r2.thesportsdb.com/images/media/team/badge/kqfwqq1659402893.png",
+    "olimpia milano": "https://r2.thesportsdb.com/images/media/team/badge/aurbi61790186853.png",
+    "pallacanestro olimpia milano": "https://r2.thesportsdb.com/images/media/team/badge/aurbi61790186853.png",
+    "dubai basketball": "https://r2.thesportsdb.com/images/media/team/badge/9q0d6x1726681476.png",
     "panathinaikos": "https://r2.thesportsdb.com/images/media/team/badge/9m26w61659402928.png",
     "olympiacos": "https://r2.thesportsdb.com/images/media/team/badge/j5v0e21659402919.png",
     "maccabi tel aviv": "https://r2.thesportsdb.com/images/media/team/badge/4v43z91659402909.png",
@@ -137,6 +143,10 @@ KNOWN_TEAM_LOGOS = {
     "los angeles lakers": "https://a.espncdn.com/i/teamlogos/nba/500/lal.png",
     "golden state warriors": "https://a.espncdn.com/i/teamlogos/nba/500/gsw.png",
     "boston celtics": "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",
+
+    # Американский футбол NFL
+    "denver broncos": "https://r2.thesportsdb.com/images/media/team/badge/zy3m9v1784718707.png",
+    "seattle seahawks": "https://r2.thesportsdb.com/images/media/team/badge/1t84c51784752684.png",
 
     # Хоккей (Швеция Allsvenskan / SHL / KHL / NHL)
     "leksands if": "https://r2.thesportsdb.com/images/media/team/badge/ruij751571478402.png",
@@ -243,12 +253,12 @@ def get_team_logo(team_name: str, sport: str = "") -> str:
         if var in _LOGO_CACHE:
             return _LOGO_CACHE[var]
 
-    # Для единоборств и тенниса возвращаем аватар
+    # Для единоборств (UFC / MMA) и тенниса возвращаем официальные значки организаций
     s_low = (sport or "").lower()
-    if any(x in s_low for x in ["mma", "ufc", "tennis", "теннис", "martial"]):
-        fallback_url = f"https://ui-avatars.com/api/?name={urllib.parse.quote(team_name)}&background=1e293b&color=38bdf8&size=128&bold=true&rounded=true"
-        _save_to_disk_cache(search_variants[0] if search_variants else team_name.lower(), fallback_url)
-        return fallback_url
+    if any(x in s_low for x in ["mma", "ufc"]):
+        return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/mma/500/ufc.png"
+    if any(x in s_low for x in ["tennis", "теннис", "atp", "wta"]):
+        return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/tennis/500/atp.png"
 
     # 3. Поиск через TheSportsDB API v3 (официальный ключ '3')
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SportsAggregator/2.0"}
