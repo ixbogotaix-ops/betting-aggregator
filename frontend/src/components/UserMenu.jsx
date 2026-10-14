@@ -50,8 +50,12 @@ export default function UserMenu() {
             <span className="text-xs font-bold text-white max-w-[110px] truncate group-hover:text-blue-300 transition-colors">
               {user.name || user.email.split('@')[0]}
             </span>
-            <span className="text-[10px] uppercase font-black px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              {user.role || 'PRO'}
+            <span className={`text-[10px] uppercase font-black px-1.5 py-0.5 rounded-md ${
+              user.role === 'admin'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10'
+                : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+            }`}>
+              {user.role === 'admin' ? '👑 ADMIN' : (user.role || 'PRO')}
             </span>
           </div>
           <span className="text-[10px] text-gray-400 truncate max-w-[120px]">
@@ -100,8 +104,12 @@ export default function UserMenu() {
               <span className="flex items-center gap-1.5 text-gray-300">
                 <Sparkles className="w-3.5 h-3.5 text-yellow-400" /> Тариф
               </span>
-              <span className="font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
-                {user.role === 'admin' ? 'Администратор' : 'PREMIUM PLUS'}
+              <span className={`font-bold px-2 py-0.5 rounded-md border text-xs ${
+                user.role === 'admin'
+                  ? 'text-amber-300 bg-amber-500/15 border-amber-500/30'
+                  : 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+              }`}>
+                {user.role === 'admin' ? '👑 Администратор (FULL ACCESS)' : 'PREMIUM PLUS'}
               </span>
             </div>
             <div className="flex items-center justify-between text-[11px]">

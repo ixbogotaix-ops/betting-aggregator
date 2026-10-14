@@ -127,10 +127,16 @@ async def authenticate_or_register_google_user(session: AsyncSession, google_inf
     res = await session.execute(stmt)
     user = res.scalar_one_or_none()
 
+    # Список главных администраторов системы
+    ADMIN_EMAILS = {"ix.bogota.ix@gmail.com"}
+    is_admin = email in ADMIN_EMAILS
+
     now = datetime.now(timezone.utc)
     if user:
         # Обновляем профиль и время последнего входа
         user.last_login_at = now
+        if is_admin:
+            user.role = "admin"
         if google_id:
             user.google_id = google_id
         if name:
@@ -144,7 +150,7 @@ async def authenticate_or_register_google_user(session: AsyncSession, google_inf
             email=email,
             name=name,
             picture=picture,
-            role="user",
+            role="admin" if is_admin else "user",
             is_active=True,
             created_at=now,
             last_login_at=now
