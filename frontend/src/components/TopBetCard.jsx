@@ -6,6 +6,24 @@ import {
 import MatchDetailModal from './MatchDetailModal';
 import TeamBadge from './TeamBadge';
 
+const formatHandicapVal = (valStr) => {
+  if (!valStr) return '0';
+  const v = valStr.replace(',', '.').trim();
+  const num = parseFloat(v);
+  if (isNaN(num)) {
+    if (['0', '+0', '-0'].includes(v)) return '0';
+    if (!v.startsWith('+') && !v.startsWith('-')) return `+${v}`;
+    return v;
+  }
+  if (num === 0) return '0';
+  if (num > 0) {
+    const cleanNum = String(Number(num.toFixed(2)));
+    return cleanNum.startsWith('+') ? cleanNum : `+${cleanNum}`;
+  } else {
+    return String(Number(num.toFixed(2)));
+  }
+};
+
 export const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   if (!outcome) return '';
 
@@ -13,8 +31,14 @@ export const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   let clean = outcome.replace(/\s*\((?:stavka tv|legalbet|vprognoze|br|betting|tg|statarea|pinnacle)\b.*?\)/gi, '').trim().replace(/\.$/, '').trim();
   const low = clean.toLowerCase();
 
-  // 0. Идемпотентность: если уже идеально отформатировано
-  if (/^фора\s+(?!1\b|2\b|хозя|гост).+?\s+\([\+\-]?\d+[\.,]?\d*\)\s+\(ф[12]\)$/i.test(clean)) return clean;
+  // 0. Если строка уже вида "Фора [Team] (val) (Ф1/Ф2)" - обязательно гарантируем знак + или - !
+  const mHandicap = clean.match(/^фора\s+(?!1\b|2\b|хозя|гост)(.+?)\s+\(([\+\-]?\d+[\.,]?\d*)\)\s+\((ф[12])\)$/i);
+  if (mHandicap) {
+    const team = mHandicap[1].trim();
+    const v = formatHandicapVal(mHandicap[2]);
+    const mCode = mHandicap[3].toUpperCase();
+    return `Фора ${team} (${v}) (${mCode})`;
+  }
   if (/^фора\s+(?!1\b|2\b|хозя|гост).+?\s+\(0\)$/i.test(clean)) return clean;
   if (/^индивидуальный тотал\s+(?!1\b|2\b|хозя|гост).+?\s+(больше|меньше)\s+\d+[\.,]?\d*\s+\(ит[12][бм]\s+\d+[\.,]?\d*\)$/i.test(clean)) return clean;
   if (/^тотал\s+(больше|меньше)\s+\d+[\.,]?\d*\s+\(т[бм]\s+\d+[\.,]?\d*\)$/i.test(clean)) return clean;
@@ -103,7 +127,7 @@ export const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     let valM = low.match(/\(\s*([\+\-]?\d+[\.,]?\d*)\s*\)/);
     if (!valM) valM = low.match(/[\+\-]\d+[\.,]?\d*/);
     if (!valM) valM = low.match(/(?:фора|handicap|ф[12]?)\s*(?:[12]|хозяев|гостей|[^\d\(\)]+)?\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
-    const val = valM ? valM[1].replace(',', '.') : '0';
+    const val = formatHandicapVal(valM ? valM[1] : '0');
 
     const isT2 = /(?:фора|handicap|ф|ah|ах|форой)\s*2(?=[^\wа-яё]|$)/i.test(low)
       || /(?:^|[^\wа-яё])(?:ф2|ah2|ах2|гост\w*|втор\w*)(?=[^\wа-яё]|$)/i.test(low)
@@ -117,19 +141,15 @@ export const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
 
     if (isT2 && !isT1) {
       const teamLabel = awayTeam || '2';
-      const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф2)' : '';
-      return `Фора ${teamLabel} (${val})${suffix}`;
+      return `Фора ${teamLabel} (${val}) (Ф2)`;
     } else if (isT1 && !isT2) {
       const teamLabel = homeTeam || '1';
-      const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф1)' : '';
-      return `Фора ${teamLabel} (${val})${suffix}`;
+      return `Фора ${teamLabel} (${val}) (Ф1)`;
     } else if (isT2 && isT1) {
       if (awayTeam && cleanMatch(low, awayTeam)) {
-        const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф2)' : '';
-        return `Фора ${awayTeam} (${val})${suffix}`;
+        return `Фора ${awayTeam} (${val}) (Ф2)`;
       }
-      const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф1)' : '';
-      return `Фора ${homeTeam} (${val})${suffix}`;
+      return `Фора ${homeTeam} (${val}) (Ф1)`;
     } else {
       return `Фора (${val})`;
     }

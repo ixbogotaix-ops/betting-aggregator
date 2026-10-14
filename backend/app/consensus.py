@@ -19,6 +19,27 @@ from app.analytics_engine import (
 )
 from app.logo_service import get_team_logo, get_league_country
 
+def format_handicap_val(val_str: str) -> str:
+    """Гарантирует четкий явный знак + или - для любой форы, чтобы не было двусмысленности."""
+    if not val_str:
+        return "0"
+    v = val_str.replace(',', '.').strip()
+    try:
+        f = float(v)
+        if f == 0:
+            return "0"
+        elif f > 0:
+            clean_num = f"{f:g}"
+            return f"+{clean_num}" if not clean_num.startswith('+') else clean_num
+        else:
+            return f"{f:g}"
+    except (ValueError, TypeError):
+        if v in ["0", "+0", "-0"]:
+            return "0"
+        if not v.startswith("+") and not v.startswith("-"):
+            return f"+{v}"
+        return v
+
 def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") -> str:
     """
     Приводит исходы любых источников к абсолютно единому стандарту спортивного беттинга:
@@ -32,7 +53,7 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     - Обе забьют — Нет (ОЗ: Нет)
     - Тотал Больше X (ТБ X)
     - Тотал Меньше X (ТМ X)
-    - Фора [Команда] (X) (Ф1/Ф2)
+    - Фора [Команда] (±X) (Ф1/Ф2)
     - Тайм/Матч: X
     - Комбинированные ставки
     """
@@ -44,9 +65,14 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     raw = raw.strip().rstrip('.').strip()
     out = raw.lower()
 
-    # 0. Идемпотентность: если исход уже в идеальном нормализованном виде — возвращаем как есть!
-    if re.match(r'^Фора\s+(?!1\b|2\b|хозя|гост).+?\s+\([\+\-]?\d+[\.,]?\d*\)\s+\(Ф[12]\)$', raw, re.IGNORECASE):
-        return raw
+    # 0. Идемпотентность и гарантированный знак для фор:
+    m_h = re.match(r'^Фора\s+(?!1\b|2\b|хозя|гост)(.+?)\s+\(([\+\-]?\d+[\.,]?\d*)\)\s+\((Ф[12])\)$', raw, re.IGNORECASE)
+    if m_h:
+        t_name = m_h.group(1).strip()
+        val_str = m_h.group(2)
+        m_code = m_h.group(3).upper()
+        clean_v = format_handicap_val(val_str)
+        return f"Фора {t_name} ({clean_v}) ({m_code})"
     if re.match(r'^Фора\s+(?!1\b|2\b|хозя|гост).+?\s+\(0\)$', raw, re.IGNORECASE):
         return raw
     if re.match(r'^Индивидуальный Тотал\s+(?!1\b|2\b|хозя|гост).+?\s+\(ИТ[12][БМ]\s+\d+[\.,]?\d*\)$', raw, re.IGNORECASE):
@@ -148,7 +174,8 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
             val_m = re.search(r'[\+\-]\d+[\.,]?\d*', out)
         if not val_m:
             val_m = re.search(r'(?:фора|handicap|ф[12]?)\s*(?:[12]|хозяев|гостей|[^\d\(\)]+)?\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', out)
-        val = val_m.group(1).replace(',', '.') if val_m else '0'
+        val_raw = val_m.group(1).replace(',', '.') if val_m else '0'
+        val = format_handicap_val(val_raw)
 
         is_t2 = bool(
             re.search(r'(?:фора|handicap|ф|ah|ах|форой)\s*2\b', out)
@@ -158,25 +185,23 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
         )
         is_t1 = bool(
             re.search(r'(?:фора|handicap|ф|ah|ах|форой)\s*1\b', out)
-            or re.search(r'\b(ф1|ah1|ах1|хозя\w*|перв\w*)\b', out)
+            or re.search(r'\b(ф1|ah1|ах1|хозя\w*|перв\w*)(?=[^\wа-яё]|$)', out)
             or (home_team and is_team_mention(out, home_team))
             or '(ф1)' in out
         )
 
         if is_t2 and not is_t1:
             team_label = away_team or '2'
-            suffix = ' (Ф2)' if val not in ['0', '+0', '-0'] else ''
+            suffix = ' (Ф2)'
             return f"Фора {team_label} ({val}){suffix}"
         elif is_t1 and not is_t2:
             team_label = home_team or '1'
-            suffix = ' (Ф1)' if val not in ['0', '+0', '-0'] else ''
+            suffix = ' (Ф1)'
             return f"Фора {team_label} ({val}){suffix}"
         elif is_t2 and is_t1:
             if away_team and is_team_mention(out, away_team):
-                suffix = ' (Ф2)' if val not in ['0', '+0', '-0'] else ''
-                return f"Фора {away_team} ({val}){suffix}"
-            suffix = ' (Ф1)' if val not in ['0', '+0', '-0'] else ''
-            return f"Фора {home_team} ({val}){suffix}"
+                return f"Фора {away_team} ({val}) (Ф2)"
+            return f"Фора {home_team} ({val}) (Ф1)"
         else:
             return f"Фора ({val})"
 
