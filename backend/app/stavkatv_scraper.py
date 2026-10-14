@@ -98,12 +98,15 @@ async def scrape_stavkatv():
                         )
                     )
                     if existing.scalars().first() is None:
+                        reasoning_el = card.select_one('.prediction-text') or card.select_one('.PredictionsItem__text') or card.select_one('.description')
+                        reasoning_text = reasoning_el.text.strip() if reasoning_el else card.text.strip()
                         pred = Prediction(
                             match_id=matched_match.id,
                             source_id=source.id,
                             predicted_outcome=outcome_str.strip(),
                             odds=odds,
                             confidence_score=60.0,
+                            reasoning=reasoning_text[:600],
                             created_at=datetime.now(timezone.utc)
                         )
                         session.add(pred)

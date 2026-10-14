@@ -60,23 +60,7 @@ async def process_capper_predictions():
             }]
             logger.info("Используем резервный тестовый матч, так как API-ключ не задан.")
             
-        # Сначала гарантированно сохраняем все найденные реальные матчи в БД!
-        # И сразу добавляем мнение букмекеров как базовый прогноз
-        
-        # Получаем/Создаем источник "Bookmaker (The-Odds-API)"
-        bm_stmt = select(Source).where(Source.name == "Global Bookmakers")
-        bm_source = (await session.execute(bm_stmt)).scalar_one_or_none()
-        if not bm_source:
-            bm_source = Source(
-                name="Global Bookmakers",
-                url="https://the-odds-api.com",
-                source_type=SourceType.prediction_site,
-                weight=1.5, # Базовый вес букмекера
-                is_active=True
-            )
-            session.add(bm_source)
-            await session.flush()
-
+        # Гарантированно сохраняем все найденные реальные матчи в БД как официальные афиши
         for m in real_matches:
             match = await find_existing_match_exact(m["home"], m["away"], session)
             if not match:
@@ -94,48 +78,6 @@ async def process_capper_predictions():
                 # Обновляем время матча до точного московского времени
                 match.match_date = m["time"]
                 
-            # Если API вернул кэфы, сохраняем их как прогноз букмекера
-            if m.get("favored_outcome") and m.get("best_odds"):
-                pred_stmt = select(Prediction).where(
-                    Prediction.match_id == match.id,
-                    Prediction.source_id == bm_source.id
-                )
-                existing_pred = (await session.execute(pred_stmt)).scalar_one_or_none()
-                
-                if not existing_pred:
-                    prediction = Prediction(
-                        match_id=match.id,
-                        source_id=bm_source.id,
-                        predicted_outcome=f"Победа: {m['favored_outcome']}",
-                        odds=m["best_odds"],
-                        confidence_score=85.0
-                    )
-                    session.add(prediction)
-
-                    # ДОБАВЛЯЕМ ВТОРОЙ ИСТОЧНИК (Математический анализ трендов)
-                    stat_stmt = select(Source).where(Source.name == "StatArea AI (Trends)")
-                    stat_source = (await session.execute(stat_stmt)).scalar_one_or_none()
-                    if not stat_source:
-                        stat_source = Source(
-                            name="StatArea AI (Trends)",
-                            url="https://statarea.com/",
-                            source_type=SourceType.prediction_site,
-                            weight=3.2,
-                            is_active=True
-                        )
-                        session.add(stat_source)
-                        await session.flush()
-                    
-                    # Делаем прогноз от StatArea
-                    stat_pred = Prediction(
-                        match_id=match.id,
-                        source_id=stat_source.id,
-                        predicted_outcome=f"Победа: {m['favored_outcome']}", # Математическая модель выбирает фаворита
-                        odds=m["best_odds"],
-                        confidence_score=88.0
-                    )
-                    session.add(stat_pred)
-                    
         await session.commit()
         
         added_preds = 0
@@ -219,7 +161,8 @@ async def process_capper_predictions():
                     source_id=capper_source.id,
                     predicted_outcome=pred_data["prediction"],
                     odds=pred_data["odds"],
-                    confidence_score=100.0
+                    confidence_score=100.0,
+                    reasoning=pred_data.get("reasoning", "")
                 )
                 session.add(prediction)
                 added_preds += 1
@@ -240,9 +183,10 @@ async def process_capper_predictions():
         top_bets = await calculate_daily_top_bets(session, date_str='ALL')
         if top_bets:
             ai_result = await auto_analyze_matches_for_scraper(top_bets)
-            if ai_result and 'bet_of_the_day_match_ids' in ai_result:
+            if ai_result and ('bet_of_the_day_match_ids' in ai_result or 'best_picks_by_match' in ai_result):
                 best_ids_dict = ai_result.get('bet_of_the_day_match_ids', {})
                 best_ids = [int(v) for v in best_ids_dict.values() if str(v).isdigit()] if isinstance(best_ids_dict, dict) else []
+                best_picks = ai_result.get('best_picks_by_match', {})
                 insights = ai_result.get('insights', {})
                 reasonings = ai_result.get('reasoning', {})
                 for t_bet in top_bets:
@@ -250,6 +194,8 @@ async def process_capper_predictions():
                     stmt = select(Match).where(Match.id == match_id)
                     db_match = (await session.execute(stmt)).scalar_one_or_none()
                     if db_match:
+                        if str(match_id) in best_picks and best_picks[str(match_id)]:
+                            db_match.chosen_outcome = str(best_picks[str(match_id)]).strip()
                         db_match.ai_insight = insights.get(str(match_id), '')
                         db_match.cappers_reasoning = reasonings.get(str(match_id), '')
                         if match_id in best_ids:

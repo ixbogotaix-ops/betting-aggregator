@@ -116,6 +116,7 @@ async def scrape_vprognoze():
                             predicted_outcome=outcome_str.strip(),
                             odds=odds,
                             confidence_score=60.0,
+                            reasoning=card.text.strip()[:600],
                             created_at=datetime.now(timezone.utc)
                         )
                         session.add(pred)

@@ -35,6 +35,47 @@ def evaluate_bet_outcome(outcome_str: str, home_score: int, away_score: int, hom
         t = unidecode(target).lower().strip()
         return q in t or t in q or fuzz.partial_ratio(q, t) > 75
 
+    # 0. Комбинированные ставки: 1X/X2/П1/П2 + ТМ/ТБ
+    m_combo = re.search(r'(1[xх]|x2|х2|п1|п2|победа\s*[12])\s*(?:\+|и|and|&)\s*(?:тм|тб|тотал\s*(?:меньше|больше))\s*\(?(\d+[\.,]?\d*)\)?', raw)
+    if m_combo:
+        side = m_combo.group(1).upper().replace('Х', 'X')
+        tot_val = float(m_combo.group(2).replace(',', '.'))
+        is_tm = ("тм" in raw or "меньше" in raw)
+        
+        side_ok = False
+        if side in ["1X", "1Х"] or "1" in side:
+            side_ok = (home_score >= away_score) if "X" in side else (home_score > away_score)
+        elif side in ["X2", "Х2"] or "2" in side:
+            side_ok = (away_score >= home_score) if "X" in side else (away_score > home_score)
+            
+        tot_ok = (total_goals < tot_val) if is_tm else (total_goals > tot_val)
+        return ResultStatus.win if (side_ok and tot_ok) else ResultStatus.loss
+
+    # 0.1 Индивидуальные тоталы (ИТБ / ИТМ)
+    itb_match = re.search(r'(?:итб\s*([12])|индивидуальный\s*тотал\s*([12])\s*больше)\s*\(?(\d+[\.,]?\d*)\)?', raw)
+    if itb_match:
+        team_num = itb_match.group(1) or itb_match.group(2)
+        val = float(itb_match.group(3).replace(',', '.'))
+        team_goals = home_score if team_num == '1' else away_score
+        if team_goals > val:
+            return ResultStatus.win
+        elif team_goals == val:
+            return ResultStatus.refund
+        else:
+            return ResultStatus.loss
+
+    itm_match = re.search(r'(?:итм\s*([12])|индивидуальный\s*тотал\s*([12])\s*меньше)\s*\(?(\d+[\.,]?\d*)\)?', raw)
+    if itm_match:
+        team_num = itm_match.group(1) or itm_match.group(2)
+        val = float(itm_match.group(3).replace(',', '.'))
+        team_goals = home_score if team_num == '1' else away_score
+        if team_goals < val:
+            return ResultStatus.win
+        elif team_goals == val:
+            return ResultStatus.refund
+        else:
+            return ResultStatus.loss
+
     # 1. Обе забьют (ОЗ)
     if "оз" in raw or "обе забьют" in raw:
         both_scored = (home_score > 0 and away_score > 0)

@@ -46,6 +46,7 @@ class Match(Base):
 
     # Новые поля для ИИ-парсера
     is_bet_of_the_day = Column(Boolean, default=False)
+    chosen_outcome = Column(String, nullable=True)
     ai_insight = Column(String, nullable=True)
     cappers_reasoning = Column(String, nullable=True)
     tactical_analysis = Column(String, nullable=True)

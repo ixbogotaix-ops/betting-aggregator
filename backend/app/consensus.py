@@ -59,17 +59,40 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
         clean_tm = raw.replace('Тайм / Матч -', '').replace('Тайм/Матч -', '').replace('Тайм / Матч —', '').strip()
         return f"Тайм/Матч: {clean_tm}"
 
-    # 2. Комбинированные ставки: Победа + Тотал / Обе забьют
-    if any(k in out for k in [" и тб", " и тм", " + тб", " + тм", " и оз", " + оз", " и обе забьют"]):
-        return raw.capitalize()
+    # 2. Комбинированные ставки: Победа / Двойной шанс + Тотал / Обе забьют
+    if any(k in out for k in [" и тб", " и тм", " + тб", " + тм", " и оз", " + оз", " и обе забьют", "+ обе забьют", "+оз"]):
+        res = raw
+        res = re.sub(r'\b1[xх]\b', '1X', res, flags=re.IGNORECASE)
+        res = re.sub(r'\b[xх]2\b', 'X2', res, flags=re.IGNORECASE)
+        res = re.sub(r'\bп1\b', 'П1', res, flags=re.IGNORECASE)
+        res = re.sub(r'\bп2\b', 'П2', res, flags=re.IGNORECASE)
+        res = re.sub(r'\bтб\b', 'ТБ', res, flags=re.IGNORECASE)
+        res = re.sub(r'\bтм\b', 'ТМ', res, flags=re.IGNORECASE)
+        res = re.sub(r'\bоз\b', 'ОЗ', res, flags=re.IGNORECASE)
+        return res
 
-    # 3. Обе забьют (ОЗ)
-    if "оз" in out or "обе забьют" in out:
+    # 3. Индивидуальные тоталы (ИТБ / ИТМ)
+    itb_match = re.search(r'(?:итб\s*([12])|ит([12])б|индивидуальный\s*тотал\s*([12])\s*больше)\s*\(?(\d+[\.,]?\d*)\)?', out)
+    if itb_match:
+        team_num = itb_match.group(1) or itb_match.group(2) or itb_match.group(3)
+        val = itb_match.group(4).replace(',', '.')
+        t_label = (home_team if team_num == '1' else away_team)
+        return f"Индивидуальный Тотал {t_label} Больше {val} (ИТБ{team_num} {val})" if t_label else f"ИТБ{team_num} ({val})"
+
+    itm_match = re.search(r'(?:итм\s*([12])|ит([12])м|индивидуальный\s*тотал\s*([12])\s*меньше)\s*\(?(\d+[\.,]?\d*)\)?', out)
+    if itm_match:
+        team_num = itm_match.group(1) or itm_match.group(2) or itm_match.group(3)
+        val = itm_match.group(4).replace(',', '.')
+        t_label = (home_team if team_num == '1' else away_team)
+        return f"Индивидуальный Тотал {t_label} Меньше {val} (ИТМ{team_num} {val})" if t_label else f"ИТМ{team_num} ({val})"
+
+    # 4. Обе забьют (ОЗ)
+    if "оз" in out or "обе забьют" in out or "обе команды забьют" in out:
         if any(w in out for w in ["нет", "no", "не забьют", "— нет", "- нет"]):
             return "Обе забьют — Нет (ОЗ: Нет)"
         return "Обе забьют — Да (ОЗ: Да)"
 
-    # 4. Двойной шанс: 1X, X2, 12
+    # 5. Двойной шанс: 1X, X2, 12
     if re.search(r'\b(1x|1х)\b', out) or ("не проиграет" in out and ("1" in out or "хозя" in out or is_team_match(out, home_team))):
         return f"{home_team} не проиграет (1X)" if home_team else "1X (Хозяева не проиграют)"
     if re.search(r'\b(x2|х2)\b', out) or ("не проиграет" in out and ("2" in out or "гост" in out or is_team_match(out, away_team))):
@@ -77,21 +100,25 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     if re.search(r'\b(12)\b', out) or "победа 1 или 2" in out:
         return "Победа 1 или 2 (12)"
 
-    # 5. Ничья
+    # 6. Ничья
     if out in ["draw", "x", "х", "ничья", "х.", "x."] or out.startswith("ничья") or out == "мир":
         return "Ничья (Х)"
 
-    # 6. Форы (ПРОВЕРЯТЬ ДО П1/П2, чтобы "Фора 2 (-1)" не стала П2!)
+    # 7. Форы (ПРОВЕРЯТЬ ДО П1/П2, чтобы "Фора 2 (-1)" не стала П2!)
     f1_match = re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', out)
     if f1_match:
         val = f1_match.group(1).replace(',', '.')
+        if val in ["0", "+0", "-0"]:
+            return f"Фора {home_team} (0)" if home_team else "Фора 1 (0)"
         return f"Фора {home_team} ({val}) (Ф1)" if home_team else f"Фора 1 ({val})"
     f2_match = re.search(r'(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', out)
     if f2_match:
         val = f2_match.group(1).replace(',', '.')
+        if val in ["0", "+0", "-0"]:
+            return f"Фора {away_team} (0)" if away_team else "Фора 2 (0)"
         return f"Фора {away_team} ({val}) (Ф2)" if away_team else f"Фора 2 ({val})"
 
-    # 7. Тоталы (ТБ / ТМ)
+    # 8. Тоталы (ТБ / ТМ)
     tb_match = re.search(r'(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?', out)
     if tb_match:
         val = tb_match.group(1).replace(',', '.')
@@ -105,7 +132,14 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
         val = tot_match.group(1).replace(',', '.')
         return f"Тотал Больше {val} (ТБ {val})"
 
-    # 8. ЧИСТАЯ Победа 2 / Гости (П2)
+    # 9. Победа с учетом ОТ и буллитов
+    if "с учетом от" in out or "с учётом от" in out or "от и булл" in out:
+        if "1" in out or (home_team and is_team_match(out, home_team)):
+            return f"Победа {home_team} (с ОТ) (П1)" if home_team else "Победа 1 (с ОТ)"
+        if "2" in out or (away_team and is_team_match(out, away_team)):
+            return f"Победа {away_team} (с ОТ) (П2)" if away_team else "Победа 2 (с ОТ)"
+
+    # 10. ЧИСТАЯ Победа 2 / Гости (П2)
     if (
         out in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды", "победа второй"]
         or re.search(r'\b(победа\s*2|победа\s*гостей|победа\s*второй)\b', out)
@@ -116,7 +150,7 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     ):
         return f"Победа {away_team} (П2)" if away_team else "Победа Гостей (П2)"
 
-    # 9. ЧИСТАЯ Победа 1 / Хозяева (П1)
+    # 11. ЧИСТАЯ Победа 1 / Хозяева (П1)
     if (
         out in ["home_win", "п1", "w1", "1", "победа 1", "победа1", "победа хозяев", "победа первой команды", "победа первой"]
         or re.search(r'\b(победа\s*1|победа\s*хозяев|победа\s*первой)\b', out)
@@ -127,7 +161,7 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
     ):
         return f"Победа {home_team} (П1)" if home_team else "Победа Хозяев (П1)"
 
-    # 10. Явное указание команды в исходе: "Победа: Juventus", "Победа Juventus"
+    # 12. Явное указание команды в исходе: "Победа: Juventus", "Победа Juventus"
     if "победа:" in out or "победа " in out or out.startswith("победа"):
         team_part = out.split(":", 1)[-1].strip() if ":" in out else out.replace("победа", "").strip()
         if not any(k in team_part for k in ["тотал", "тб", "тм", "тайм", "фора"]):
@@ -163,34 +197,42 @@ def calculate_passability_multiplier(outcome: str, odds: float) -> float:
     """
     Рассчитывает множитель математической проходимости (Win Rate).
     В беттинге ставки с закрытием 2 из 3 исходов (1X, X2, Фора 0, Фора +1.5)
-    и надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5) статистически проходят в 75-88% случаев,
+    и надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5, 1X + ТМ) статистически проходят в 75-88% случаев,
     в то время как чистая победа П1 / П2 на фаворита часто срывается ничьей.
     """
     if not outcome:
         return 1.0
     out_low = outcome.lower()
 
-    # 1. Двойной шанс (1X, X2) - максимальная проходимость (78-88%)!
+    # 1. Комбо с подстраховкой ничьей и тотала (1X + ТМ, X2 + ТМ, П1 + ТМ 4.5) - максимальная проходимость!
+    if any(k in out_low for k in ["+ тм", "и тм", "1x +", "1х +", "x2 +", "х2 +"]):
+        return 1.40
+
+    # 2. Двойной шанс (1X, X2) - закрывает 2 из 3 исходов (78-88% проходимость)
     if any(k in out_low for k in ["1x", "1х", "x2", "х2", "не проиграет", "двойной"]):
         return 1.35
 
-    # 2. Мягкие надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5, ТМ 4)
+    # 3. Индивидуальные тоталы на меньше (ИТМ)
+    if "итм" in out_low or "тотал меньше" in out_low and "индивидуальный" in out_low:
+        return 1.30
+
+    # 4. Мягкие надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5, ТМ 4, ТМ 4.5)
     if any(k in out_low for k in ["тб 1.5", "тб 1", "тб 2", "тм 3.5", "тм 4", "тм 4.5"]):
         return 1.25
 
-    # 3. Форы с подстраховкой ничьей (0, +1, +1.5)
+    # 5. Форы с подстраховкой ничьей (Фора (0), +1, +1.5, +2)
     if any(k in out_low for k in ["(0)", "(+1", "(+1.5", "(+2"]):
         return 1.25
 
-    # 4. Обе забьют (ОЗ: Да)
-    if "обе забьют — да" in out_low or "оз: да" in out_low or "обе забьют - да" in out_low:
+    # 6. Обе забьют (ОЗ: Да) и Индивидуальный тотал больше (ИТБ 1)
+    if "обе забьют — да" in out_low or "оз: да" in out_low or "итб" in out_low:
         return 1.15
 
-    # 5. Стандартные тоталы (ТБ 2.5, ТМ 2.5)
+    # 7. Стандартные тоталы (ТБ 2.5, ТМ 2.5)
     if "тб 2.5" in out_low or "тм 2.5" in out_low or "тотал" in out_low:
         return 1.10
 
-    # 6. Чистая победа (П1 / П2) - базовый множитель 1.0
+    # 8. Чистая победа (П1 / П2) - базовый множитель 1.0 (самый высокий риск ничьей)
     return 1.0
 
 def get_generic_sport(s: str) -> str:
@@ -289,51 +331,59 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         best_avg_odds = 0.0
         best_sources = []
 
-        # Анализируем каждый возможный исход в этом матче
-        for outcome, preds in outcomes_map.items():
-            raw_score = 0.0
-            total_odds = 0.0
-            supporting_sources = []
-            
-            # Считаем суммарный вес капперов
-            high_tier_cappers_count = 0
-
-            for p in preds:
-                # Вес источника базируется на его ROI (устанавливается парсером)
-                source_weight = p.source.weight if p.source and p.source.weight else 1.0
-                raw_score += source_weight
-                total_odds += p.odds
-                
-                if p.source:
-                    # Добавляем имя каппера и его вес (для визуала на фронте)
-                    source_label = f"{p.source.name} (Рейтинг: {round(source_weight, 1)})"
-                    supporting_sources.append(source_label)
-                    
-                if source_weight >= 3.0: # Считаем, что каппер топ-уровня
-                    high_tier_cappers_count += 1
-
-            avg_odds = total_odds / len(preds)
-            
-            # Применяем множитель коэффициента и бонус математической надежности (проходимости)
-            final_score = raw_score * calculate_odds_multiplier(avg_odds) * calculate_passability_multiplier(outcome, avg_odds)
-            
-            # БОНУС ЗА КОНСЕНСУС: Если сразу несколько ТОП-капперов дали этот прогноз
-            if len(preds) > 1:
-                consensus_multiplier = 1.0 + (len(preds) * 0.2)
-                # Если среди них есть профи, даем еще больший буст
-                consensus_multiplier += (high_tier_cappers_count * 0.3)
-                final_score *= consensus_multiplier
-
-            # Переводим в 100-балльную шкалу.
-            # Эталонный максимальный скор: 3 топ-каппера (вес 5.0) = 15.0 базовая + консенсус = ~30.0
-            MAX_EXPECTED_SCORE = 30.0
-            normalized_score = min((final_score / MAX_EXPECTED_SCORE) * 100, 100.0)
-
-            if normalized_score > best_score:
-                best_score = normalized_score
-                best_outcome = outcome
+        # 1. Если ИИ ранее выбрал умную ставку среди прогнозов капперов (chosen_outcome)
+        if match.chosen_outcome:
+            norm_chosen = normalize_outcome(match.chosen_outcome, match.home_team, match.away_team)
+            if norm_chosen in outcomes_map:
+                preds = outcomes_map[norm_chosen]
+                total_odds = sum(p.odds for p in preds)
+                avg_odds = total_odds / len(preds)
+                raw_score = sum((p.source.weight if p.source and p.source.weight else 1.0) for p in preds)
+                final_score = raw_score * calculate_odds_multiplier(avg_odds) * calculate_passability_multiplier(norm_chosen, avg_odds)
+                if len(preds) > 1:
+                    final_score *= (1.0 + len(preds) * 0.2)
+                best_score = max(min((final_score / 30.0) * 100, 100.0), 75.0)
+                best_outcome = norm_chosen
                 best_avg_odds = avg_odds
-                best_sources = supporting_sources
+                best_sources = [f"{p.source.name} (Рейтинг: {round(p.source.weight, 1)})" for p in preds if p.source]
+            else:
+                best_outcome = norm_chosen
+                best_avg_odds = sum(p.odds for p in match.predictions) / len(match.predictions)
+                best_score = 88.0
+                best_sources = [f"{p.source.name} (Рейтинг: {round(p.source.weight, 1)})" for p in match.predictions if p.source]
+
+        # 2. Если chosen_outcome нет, выбираем математически лучший исход по весам и проходимости
+        if not best_outcome:
+            for outcome, preds in outcomes_map.items():
+                raw_score = 0.0
+                total_odds = 0.0
+                supporting_sources = []
+                high_tier_cappers_count = 0
+
+                for p in preds:
+                    source_weight = p.source.weight if p.source and p.source.weight else 1.0
+                    raw_score += source_weight
+                    total_odds += p.odds
+                    if p.source:
+                        source_label = f"{p.source.name} (Рейтинг: {round(source_weight, 1)})"
+                        supporting_sources.append(source_label)
+                    if source_weight >= 3.0:
+                        high_tier_cappers_count += 1
+
+                avg_odds = total_odds / len(preds)
+                final_score = raw_score * calculate_odds_multiplier(avg_odds) * calculate_passability_multiplier(outcome, avg_odds)
+                if len(preds) > 1:
+                    consensus_multiplier = 1.0 + (len(preds) * 0.2) + (high_tier_cappers_count * 0.3)
+                    final_score *= consensus_multiplier
+
+                MAX_EXPECTED_SCORE = 30.0
+                normalized_score = min((final_score / MAX_EXPECTED_SCORE) * 100, 100.0)
+
+                if normalized_score > best_score:
+                    best_score = normalized_score
+                    best_outcome = outcome
+                    best_avg_odds = avg_odds
+                    best_sources = supporting_sources
 
         # Собираем подробный список всех мнений капперов по этому матчу
         detailed_preds = []

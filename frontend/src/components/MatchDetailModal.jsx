@@ -27,8 +27,24 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   }
 
   // 2. Комбинированные ставки
-  if (low.includes(' и тб') || low.includes(' и тм') || low.includes(' + тб') || low.includes(' + тм') || low.includes(' и оз') || low.includes(' + оз')) {
+  if (low.includes(' и тб') || low.includes(' и тм') || low.includes(' + тб') || low.includes(' + тм') || low.includes(' и оз') || low.includes(' + оз') || low.includes('+ тм') || low.includes('+ тб')) {
     return clean;
+  }
+
+  // 2.1 Индивидуальные тоталы (ИТБ / ИТМ)
+  const itb = low.match(/(?:итб\s*([12])|ит([12])б|индивидуальный\s*тотал\s*([12])\s*больше)\s*\(?(\d+[\.,]?\d*)\)?/i);
+  if (itb) {
+    const teamNum = itb[1] || itb[2] || itb[3];
+    const val = itb[4].replace(',', '.');
+    const teamName = teamNum === '1' ? homeTeam : awayTeam;
+    return teamName ? `Индивидуальный Тотал ${teamName} Больше ${val} (ИТБ${teamNum} ${val})` : `ИТБ${teamNum} (${val})`;
+  }
+  const itm = low.match(/(?:итм\s*([12])|ит([12])м|индивидуальный\s*тотал\s*([12])\s*меньше)\s*\(?(\d+[\.,]?\d*)\)?/i);
+  if (itm) {
+    const teamNum = itm[1] || itm[2] || itm[3];
+    const val = itm[4].replace(',', '.');
+    const teamName = teamNum === '1' ? homeTeam : awayTeam;
+    return teamName ? `Индивидуальный Тотал ${teamName} Меньше ${val} (ИТМ${teamNum} ${val})` : `ИТМ${teamNum} (${val})`;
   }
 
   // 3. Обе забьют (ОЗ)

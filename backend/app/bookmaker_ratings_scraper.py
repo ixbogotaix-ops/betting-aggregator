@@ -106,12 +106,14 @@ async def scrape_bookmaker_ratings():
                         )
                     )
                     if existing.scalars().first() is None:
+                        reasoning_br = " ".join(strings[:4]) if len(strings) >= 4 else a.text.strip()
                         pred = Prediction(
                             match_id=matched_match.id,
                             source_id=source.id,
                             predicted_outcome=outcome_str.strip(),
                             odds=odds,
                             confidence_score=60.0,
+                            reasoning=reasoning_br[:600],
                             created_at=datetime.now(timezone.utc)
                         )
                         session.add(pred)

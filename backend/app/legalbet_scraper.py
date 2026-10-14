@@ -111,6 +111,7 @@ async def scrape_legalbet():
                             predicted_outcome=outcome_str.strip(),
                             odds=odds,
                             confidence_score=60.0,
+                            reasoning=full_text.strip()[:600],
                             created_at=datetime.now(timezone.utc)
                         )
                         session.add(pred)
