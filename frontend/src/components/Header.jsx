@@ -4,14 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import AuthModal from './AuthModal';
 import UserMenu from './UserMenu';
 
-const sports = [
-  { id: 'All', label: 'Все', icon: '🏆' },
-  { id: 'Football', label: 'Футбол', icon: '⚽' },
-  { id: 'Hockey', label: 'Хоккей', icon: '🏒' },
-  { id: 'Basketball', label: 'Баскетбол', icon: '🏀' },
-  { id: 'Esports', label: 'Киберспорт', icon: '🎮' },
-];
-
 const MoscowClock = () => {
   const [time, setTime] = useState(new Date());
 
@@ -38,44 +30,28 @@ const MoscowClock = () => {
   );
 };
 
-const Header = ({ currentSport, onSportChange, onOpenSources }) => {
+const Header = ({ onOpenSources }) => {
   const { isLoggedIn } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   return (
-    <header className="bg-dark border-b border-gray-800 sticky top-0 z-50">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="bg-dark/95 backdrop-blur-md border-b border-gray-800/80 sticky top-0 z-50">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20 gap-4">
           {/* Logo */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="p-2.5 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="p-2.5 bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-purple-500/20 border border-blue-500/30 rounded-2xl shadow-lg shadow-blue-500/10">
               <Trophy className="w-7 h-7 text-accent" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 tracking-tight">
-              AI Sports Aggregator
-            </h1>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 tracking-tight leading-none">
+                AI Sports Aggregator
+              </h1>
+              <p className="text-[11px] font-semibold text-gray-400 mt-1 hidden sm:block">
+                Консенсус топ-капперов & Нейроаналитика
+              </p>
+            </div>
           </div>
-
-          {/* Navigation/Filters */}
-          <nav className="flex items-center space-x-1 sm:space-x-1.5 overflow-x-auto mx-2 sm:mx-4 py-1 scrollbar-none [&::-webkit-scrollbar]:hidden">
-            {sports.map((sport) => {
-              const isActive = currentSport === sport.id;
-              return (
-                <button
-                  key={sport.id}
-                  onClick={() => onSportChange(sport.id)}
-                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap tracking-wide
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-blue-400/50 scale-[1.02]' 
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800/80 ring-1 ring-transparent hover:ring-gray-700/60'
-                    }`}
-                >
-                  <span className="text-sm">{sport.icon}</span>
-                  <span>{sport.label}</span>
-                </button>
-              );
-            })}
-          </nav>
 
           {/* Right Area: Sources Button, Clock & User/Auth */}
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">

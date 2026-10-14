@@ -9,10 +9,21 @@ import DailyParlaysWidget from './components/DailyParlaysWidget';
 import { 
   Flame, CalendarDays, AlertTriangle, Bot, CheckCircle2, 
   Trophy, Clock, Zap, ArrowRight, Sparkles, Filter, 
-  ArrowUpDown, Users, TrendingUp, Radio 
+  ArrowUpDown, Users, TrendingUp, Radio, ChevronRight 
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+const sportsList = [
+  { id: 'All', label: 'Все виды', icon: '🏆' },
+  { id: 'Football', label: 'Футбол', icon: '⚽' },
+  { id: 'Hockey', label: 'Хоккей', icon: '🏒' },
+  { id: 'Basketball', label: 'Баскетбол', icon: '🏀' },
+  { id: 'MMA', label: 'ММА / Бои', icon: '🥊' },
+  { id: 'American Football', label: 'Амер. футбол', icon: '🏈' },
+  { id: 'Tennis', label: 'Теннис', icon: '🎾' },
+  { id: 'Esports', label: 'Киберспорт', icon: '🎮' },
+];
 
 function App() {
   const [currentSport, setCurrentSport] = useState('All');
@@ -87,7 +98,25 @@ function App() {
     }
   };
 
-  // Ставки дня: ровно по 1 лучшей ставке на каждый вид спорта (флаг is_bet_of_the_day)
+  // Подсчёт количества прогнозов по каждому виду спорта
+  const sportCounts = useMemo(() => {
+    const counts = { All: topBets.length };
+    for (const bet of topBets) {
+      const s = (bet.sport_type || '').toLowerCase();
+      let gen = 'Football';
+      if (s.includes('mma') || s.includes('ufc') || s.includes('boxing')) gen = 'MMA';
+      else if (s.includes('tennis') || s.includes('atp') || s.includes('wta')) gen = 'Tennis';
+      else if (s.includes('basketball') || s.includes('nba') || s.includes('euroleague')) gen = 'Basketball';
+      else if (!s.includes('veikkausliiga') && (s.includes('hockey') || s.includes('nhl') || s.includes('khl') || s.includes('allsvenskan') || s.includes('shl') || s.includes('liiga'))) gen = 'Hockey';
+      else if (s.includes('nfl') || s.includes('ncaaf') || s.includes('american football')) gen = 'American Football';
+      else if (s.includes('esport') || s.includes('cs:go') || s.includes('cs2') || s.includes('dota')) gen = 'Esports';
+      
+      counts[gen] = (counts[gen] || 0) + 1;
+    }
+    return counts;
+  }, [topBets]);
+
+  // 1. Главные Ставки Дня (флаг is_bet_of_the_day)
   const botdBets = useMemo(() => {
     const bets = topBets.filter(b => b.is_bet_of_the_day);
     if (bets.length > 0) return bets;
@@ -103,7 +132,13 @@ function App() {
     return res;
   }, [topBets]);
 
-  // Сортировка для раздела "Лучшие от капперов"
+  // 2. Другие сильные прогнозы и кандидаты дня (из которых выбиралась ставка дня)
+  const candidateBets = useMemo(() => {
+    const botdIds = new Set(botdBets.map(b => b.match_id + b.recommended_outcome));
+    return topBets.filter(b => !botdIds.has(b.match_id + b.recommended_outcome));
+  }, [topBets, botdBets]);
+
+  // Сортировка для раздела "Все прогнозы капперов"
   const sortedCappersBets = useMemo(() => {
     const list = [...topBets];
     if (cappersSort === 'confidence') {
@@ -122,24 +157,74 @@ function App() {
     return list;
   }, [topBets, cappersSort]);
 
-  return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header 
-        currentSport={currentSport} 
-        onSportChange={setCurrentSport} 
-        onOpenSources={() => setIsSourcesOpen(true)}
-      />
+  const activeSportLabel = sportsList.find(s => s.id === currentSport)?.label || currentSport;
 
-      <div className="flex-grow max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  return (
+    <div className="min-h-screen flex flex-col font-sans bg-[#090d16] text-gray-100 selection:bg-blue-500/30 selection:text-white">
+      {/* Шапка сайта: чистая, просторная, без скученных кнопок */}
+      <Header onOpenSources={() => setIsSourcesOpen(true)} />
+
+      <div className="flex-grow max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <main className="w-full min-w-0">
           {error && (
-            <div className="mb-8 p-4 bg-danger/10 border border-danger/30 rounded-lg flex items-center gap-3 text-danger">
+            <div className="mb-6 p-4 bg-danger/10 border border-danger/30 rounded-2xl flex items-center gap-3 text-danger shadow-md">
               <AlertTriangle className="w-5 h-5 shrink-0" />
-              <p>{error}</p>
+              <p className="text-sm font-semibold">{error}</p>
             </div>
           )}
 
-          {/* НАВИГАЦИЯ ПО РАЗДЕЛАМ (КНОПКИ ТАБОВ) */}
+          {/* БОЛЬШИЕ КНОПКИ ВИДОВ СПОРТА (СПУЩЕНЫ ВНИЗ И УВЕЛИЧЕНЫ) */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between gap-2 mb-3 px-1">
+              <span className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                <span>Выберите вид спорта:</span>
+              </span>
+              {currentSport !== 'All' && (
+                <button
+                  onClick={() => setCurrentSport('All')}
+                  className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Сбросить на «Все виды»
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
+              {sportsList.map((sport) => {
+                const isActive = currentSport === sport.id;
+                const count = sport.id === 'All' ? topBets.length : (sportCounts[sport.id] || 0);
+
+                return (
+                  <button
+                    key={sport.id}
+                    onClick={() => setCurrentSport(sport.id)}
+                    className={`group flex items-center gap-2.5 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl text-xs sm:text-sm font-black transition-all whitespace-nowrap shadow-md cursor-pointer select-none
+                      ${isActive 
+                        ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/60 scale-[1.03]' 
+                        : 'bg-gray-900/90 hover:bg-gray-800/90 border border-gray-800 text-gray-300 hover:text-white hover:border-gray-700 hover:scale-[1.01]'
+                      }`}
+                  >
+                    <span className="text-base sm:text-lg group-hover:scale-110 transition-transform">
+                      {sport.icon}
+                    </span>
+                    <span className="tracking-wide">{sport.label}</span>
+                    {count > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-black transition-colors ${
+                        isActive 
+                          ? 'bg-white/20 text-white border border-white/30' 
+                          : 'bg-gray-800 text-gray-400 group-hover:text-gray-200 border border-gray-700/60'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* НАВИГАЦИЯ ПО РАЗДЕЛАМ (ТАБЫ) */}
           <div className="flex items-center gap-2 p-1.5 bg-gray-900/90 border border-gray-800 rounded-2xl mb-8 overflow-x-auto shadow-md scrollbar-none [&::-webkit-scrollbar]:hidden">
             <button
               onClick={() => setActiveTab('botd')}
@@ -150,7 +235,7 @@ function App() {
               }`}
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>🏆 Ставки Дня</span>
+              <span>🏆 Ставки Дня и Кандидаты</span>
               {botdBets.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
                   {botdBets.length}
@@ -167,7 +252,7 @@ function App() {
               }`}
             >
               <Flame className="w-4 h-4 text-orange-400" />
-              <span>🔥 Лучшие от Капперов</span>
+              <span>🔥 Все прогнозы капперов</span>
               {topBets.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
                   {topBets.length}
@@ -224,9 +309,9 @@ function App() {
             </button>
           </div>
 
-          {/* РАЗДЕЛ 1: СТАВКИ ДНЯ ПО ВИДАМ СПОРТА (Главный экран) */}
+          {/* РАЗДЕЛ 1: СТАВКИ ДНЯ И КАНДИДАТЫ (Главный экран) */}
           {activeTab === 'botd' && (
-            <div className="space-y-8 animate-fade-in">
+            <div className="space-y-12 animate-fade-in">
               {/* Баннер Экспресса Дня */}
               <div 
                 onClick={() => setActiveTab('parlays')}
@@ -254,104 +339,129 @@ function App() {
                 </div>
               </div>
 
-              {/* Заголовок секции Ставок Дня */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                    <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
-                    <span>Главные Ставки Дня по видам спорта</span>
-                  </h2>
-                  <p className="text-xs sm:text-sm text-gray-400 mt-1">
-                    По 1 самому надежному и выверенному матчу на каждый вид спорта от нейросети и топ-экспертов
-                  </p>
-                </div>
-
-                {topBets.length > 0 && (
-                  <button 
-                    onClick={handleAiAnalysis}
-                    disabled={isAiLoading}
-                    className="group relative flex items-center gap-2 bg-gradient-to-r from-blue-600 via-accent to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm transition-all disabled:opacity-50 overflow-hidden shadow-lg shadow-blue-500/25 shrink-0"
-                  >
-                    <div className="absolute inset-0 w-full h-full bg-white/20 group-hover:scale-x-100 scale-x-0 origin-left transition-transform duration-300"></div>
-                    <Bot className={`w-5 h-5 relative z-10 ${isAiLoading ? 'animate-bounce' : ''}`} />
-                    <span className="relative z-10">{isAiLoading ? 'Нейросеть думает...' : 'Получить Супер-Анализ 🚀'}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Инсайт нейросети */}
-              {aiVerdict && (
-                <div className="p-6 bg-gradient-to-br from-card to-gray-900 border border-blue-500/30 rounded-2xl shadow-lg shadow-blue-500/10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-blue-500/20 rounded-lg">
-                      <Bot className="w-6 h-6 text-blue-400" />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-accent">
-                      Аналитика Нейросети
-                    </h3>
+              {/* БЛОК 1: ГЛАВНЫЕ СТАВКИ ДНЯ */}
+              <section>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2.5">
+                      <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
+                      <span>Главные Ставки Дня {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-400 mt-1">
+                      Ключевой выбор нейросети и экспертов: 1 самый надежный выверенный матч в своей категории
+                    </p>
                   </div>
-                  <div className="prose prose-invert prose-lg max-w-none text-gray-300 leading-relaxed">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="w-full text-left border-collapse" {...props} /></div>,
-                        thead: ({node, ...props}) => <thead className="bg-gray-800/50 border-b border-blue-500/30" {...props} />,
-                        th: ({node, ...props}) => <th className="p-3 text-blue-400 font-bold" {...props} />,
-                        td: ({node, ...props}) => <td className="p-3 border-b border-gray-800/50" {...props} />,
-                        strong: ({node, ...props}) => <strong className="text-white font-black" {...props} />,
-                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-white mb-4 mt-6" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-xl font-bold text-white mb-3 mt-5" {...props} />,
-                        h3: ({node, ...props}) => <h3 className="text-lg font-bold text-white mb-2 mt-4" {...props} />,
-                        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-2" {...props} />,
-                        li: ({node, ...props}) => <li className="text-gray-300" {...props} />
-                      }}
+
+                  {topBets.length > 0 && (
+                    <button 
+                      onClick={handleAiAnalysis}
+                      disabled={isAiLoading}
+                      className="group relative flex items-center gap-2 bg-gradient-to-r from-blue-600 via-accent to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm transition-all disabled:opacity-50 overflow-hidden shadow-lg shadow-blue-500/25 shrink-0"
                     >
-                      {aiVerdict}
-                    </ReactMarkdown>
-                  </div>
+                      <div className="absolute inset-0 w-full h-full bg-white/20 group-hover:scale-x-100 scale-x-0 origin-left transition-transform duration-300"></div>
+                      <Bot className={`w-5 h-5 relative z-10 ${isAiLoading ? 'animate-bounce' : ''}`} />
+                      <span className="relative z-10">{isAiLoading ? 'Нейросеть думает...' : 'Получить Супер-Анализ 🚀'}</span>
+                    </button>
+                  )}
                 </div>
-              )}
 
-              {/* Сетка Ставок Дня */}
-              {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="h-64 bg-card rounded-2xl border border-gray-800 animate-pulse"></div>
-                  ))}
-                </div>
-              ) : botdBets.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                  {botdBets.map(bet => (
-                    <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 bg-gray-900/50 rounded-3xl border border-gray-800 text-gray-400">
-                  <Sparkles className="w-12 h-12 text-amber-500/40 mx-auto mb-3" />
-                  <p className="text-base font-bold text-gray-200">Ставки дня формируются</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Капперы и нейросеть анализируют предстоящие матчи для этой категории.
-                  </p>
-                </div>
+                {/* Инсайт нейросети */}
+                {aiVerdict && (
+                  <div className="mb-8 p-6 bg-gradient-to-br from-card to-gray-900 border border-blue-500/30 rounded-2xl shadow-lg shadow-blue-500/10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <Bot className="w-6 h-6 text-blue-400" />
+                      </div>
+                      <h3 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-accent">
+                        Аналитика Нейросети
+                      </h3>
+                    </div>
+                    <div className="prose prose-invert prose-lg max-w-none text-gray-300 leading-relaxed">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="w-full text-left border-collapse" {...props} /></div>,
+                          thead: ({node, ...props}) => <thead className="bg-gray-800/50 border-b border-blue-500/30" {...props} />,
+                          th: ({node, ...props}) => <th className="p-3 text-blue-400 font-bold" {...props} />,
+                          td: ({node, ...props}) => <td className="p-3 border-b border-gray-800/50" {...props} />,
+                          strong: ({node, ...props}) => <strong className="text-white font-black" {...props} />,
+                          h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-white mb-4 mt-6" {...props} />,
+                          h2: ({node, ...props}) => <h2 className="text-xl font-bold text-white mb-3 mt-5" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="text-lg font-bold text-white mb-2 mt-4" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2" {...props} />,
+                          ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-2" {...props} />,
+                          li: ({node, ...props}) => <li className="text-gray-300" {...props} />
+                        }}
+                      >
+                        {aiVerdict}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {/* Сетка Ставок Дня */}
+                {loading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="h-64 bg-card rounded-2xl border border-gray-800 animate-pulse"></div>
+                    ))}
+                  </div>
+                ) : botdBets.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                    {botdBets.map(bet => (
+                      <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-gray-900/50 rounded-3xl border border-gray-800 text-gray-400">
+                    <Sparkles className="w-10 h-10 text-amber-500/40 mx-auto mb-2" />
+                    <p className="text-base font-bold text-gray-200">Ставки дня для этой категории формируются</p>
+                  </div>
+                )}
+              </section>
+
+              {/* БЛОК 2: ДРУГИЕ СТАВКИ (КАНДИДАТЫ, ИЗ КОТОРЫХ ВЫБИРАЛАСЬ СТАВКА ДНЯ) */}
+              {candidateBets.length > 0 && (
+                <section className="pt-8 border-t border-gray-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                    <div>
+                      <h3 className="text-lg sm:text-xl font-black text-gray-100 flex items-center gap-2">
+                        <Flame className="w-5 h-5 text-orange-400" />
+                        <span>Другие уверенные прогнозы капперов {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
+                        <span className="text-xs font-bold px-2.5 py-0.5 bg-blue-500/15 text-blue-400 rounded-full border border-blue-500/25">
+                          {candidateBets.length} матчей
+                        </span>
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Ординарные прогнозы с высоким консенсусом экспертов, из которых отбиралась главная Ставка Дня
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                    {candidateBets.map(bet => (
+                      <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
+                    ))}
+                  </div>
+                </section>
               )}
             </div>
           )}
 
-          {/* РАЗДЕЛ 2: ЛУЧШИЕ ОТ КАППЕРОВ (Все топовые прогнозы с консенсусом) */}
+          {/* РАЗДЕЛ 2: ВСЕ ПРОГНОЗЫ КАППЕРОВ (Сортировка и каталог) */}
           {activeTab === 'cappers' && (
             <div className="space-y-6 animate-fade-in">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-900/60 rounded-2xl border border-gray-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 bg-gray-900/60 rounded-2xl border border-gray-800">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
                     <Flame className="w-6 h-6 text-orange-400" />
-                    <span>Лучшие ставки от капперов</span>
+                    <span>Все прогнозы топ-капперов {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
                     <span className="text-sm font-semibold px-2.5 py-0.5 bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20">
                       {sortedCappersBets.length} прогнозов
                     </span>
                   </h2>
                   <p className="text-xs text-gray-400 mt-1">
-                    Полный список матчей с максимальным консенсусом ведущих аналитиков Рунета
+                    Полный каталог всех исходов от капперов Рунета с возможностью сортировки
                   </p>
                 </div>
 
@@ -428,7 +538,7 @@ function App() {
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
                     <CalendarDays className="w-6 h-6 text-cyan-400" />
-                    <span>Расписание матчей и Линия</span>
+                    <span>Расписание матчей и Линия {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
                   </h2>
                   <p className="text-xs text-gray-400 mt-1">
                     Все события на выбранную дату с распределением мнений капперов
@@ -460,7 +570,7 @@ function App() {
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
                     <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                    <span>Архив завершённых матчей</span>
+                    <span>Архив завершённых матчей {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
                   </h2>
                   <p className="text-xs text-gray-400 mt-1">
                     Финальные счета и автоматическая верификация проходимости ставок
@@ -512,7 +622,7 @@ function App() {
       <button
         onClick={() => setIsSourcesOpen(true)}
         title="Мониторинг источников и капперов"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-gray-900/90 hover:bg-gray-800 border border-gray-700/80 text-gray-200 shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 group ring-1 ring-blue-500/30"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-gray-900/90 hover:bg-gray-850 border border-gray-700/80 text-gray-200 shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 group ring-1 ring-blue-500/30 cursor-pointer"
       >
         <div className="relative flex items-center justify-center">
           <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
