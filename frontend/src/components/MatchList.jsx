@@ -1,4 +1,5 @@
 import React from 'react';
+import TeamBadge from './TeamBadge';
 
 const MatchList = ({ matches }) => {
   if (!matches || matches.length === 0) {
@@ -8,9 +9,6 @@ const MatchList = ({ matches }) => {
       </div>
     );
   }
-
-  const getLogoUrl = (teamName) => 
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=1e293b&color=38bdf8&size=64&bold=true&rounded=true`;
 
   return (
     <div className="overflow-x-auto">
@@ -27,35 +25,34 @@ const MatchList = ({ matches }) => {
           {matches.map((match) => (
             <tr key={match.id} className="hover:bg-gray-800/30 transition-colors group">
               <td className="py-4 px-4 text-sm text-gray-400 whitespace-nowrap">
-                {new Date(match.match_date).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'})}
+                {new Date(match.match_date).toLocaleString('ru-RU', {
+                  month: 'short', 
+                  day: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  timeZone: 'Europe/Moscow'
+                })}
               </td>
               <td className="py-4 px-4">
                 <div className="flex items-center gap-3">
                   {/* Хозяева */}
                   <div className="flex items-center gap-2.5 w-[45%] justify-end">
                     <span className="font-semibold text-gray-200 text-right truncate">{match.home_team}</span>
-                    <div className="w-8 h-8 rounded-xl bg-gray-900/90 p-1 flex items-center justify-center shrink-0 ring-1 ring-gray-700/80 shadow-sm group-hover:ring-blue-500/50 transition-all">
-                      <img 
-                        src={match.home_logo || getLogoUrl(match.home_team)} 
-                        alt={match.home_team} 
-                        className="max-w-full max-h-full object-contain filter drop-shadow-sm" 
-                        onError={(e) => { e.currentTarget.src = getLogoUrl(match.home_team); }}
-                      />
-                    </div>
+                    <TeamBadge teamName={match.home_team} logoUrl={match.home_logo} size="sm" />
                   </div>
                   
-                  <span className="text-xs font-black text-gray-500 italic px-1">VS</span>
+                  {/* Разделитель VS или счет */}
+                  {match.final_score_home !== null && match.final_score_away !== null ? (
+                    <span className="px-2 py-0.5 rounded-lg bg-gray-800 text-xs font-black text-emerald-400 border border-emerald-500/30">
+                      {match.final_score_home}:{match.final_score_away}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-black text-gray-500 italic px-1">VS</span>
+                  )}
                   
                   {/* Гости */}
                   <div className="flex items-center gap-2.5 w-[45%]">
-                    <div className="w-8 h-8 rounded-xl bg-gray-900/90 p-1 flex items-center justify-center shrink-0 ring-1 ring-gray-700/80 shadow-sm group-hover:ring-purple-500/50 transition-all">
-                      <img 
-                        src={match.away_logo || getLogoUrl(match.away_team)} 
-                        alt={match.away_team} 
-                        className="max-w-full max-h-full object-contain filter drop-shadow-sm" 
-                        onError={(e) => { e.currentTarget.src = getLogoUrl(match.away_team); }}
-                      />
-                    </div>
+                    <TeamBadge teamName={match.away_team} logoUrl={match.away_logo} size="sm" />
                     <span className="font-semibold text-gray-200 truncate">{match.away_team}</span>
                   </div>
                 </div>

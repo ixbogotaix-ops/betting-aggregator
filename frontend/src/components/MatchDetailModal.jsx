@@ -4,6 +4,7 @@ import {
   MessageSquare, Flame, BookOpen, Swords, BarChart3, CheckCircle2 
 } from 'lucide-react';
 import { getSportDisplay } from './TopBetCard';
+import TeamBadge from './TeamBadge';
 
 const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   if (!outcome) return '';
@@ -191,9 +192,6 @@ const MatchDetailModal = ({ bet, onClose }) => {
     ? bet.match_name.split(' vs ')
     : bet.match_name.split(' - ');
 
-  const getLogoUrl = (teamName) =>
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=random&color=fff&size=80&bold=true&rounded=true`;
-
   const predictions = bet.all_predictions || [];
 
   // Подсчет распределения исходов
@@ -255,14 +253,7 @@ const MatchDetailModal = ({ bet, onClose }) => {
           {/* Команды и время матча с эмблемами */}
           <div className="flex items-center justify-between gap-4 mt-3">
             <div className="flex flex-col items-center flex-1 text-center">
-              <div className="w-20 h-20 p-2 bg-gray-800/90 rounded-3xl flex items-center justify-center mb-2 ring-2 ring-blue-500/40 shadow-xl">
-                <img 
-                  src={bet.home_logo || getLogoUrl(homeTeam)} 
-                  alt={homeTeam} 
-                  className="max-w-full max-h-full object-contain filter drop-shadow-lg"
-                  onError={(e) => { e.currentTarget.src = getLogoUrl(homeTeam); }}
-                />
-              </div>
+              <TeamBadge teamName={homeTeam} logoUrl={bet.home_logo} size="lg" className="mb-2 !w-18 !h-18" />
               <h3 className="font-bold text-white text-base leading-tight">{homeTeam}</h3>
               <span className="text-[11px] text-gray-400 mt-0.5">Хозяева</span>
             </div>
@@ -298,14 +289,7 @@ const MatchDetailModal = ({ bet, onClose }) => {
             </div>
 
             <div className="flex flex-col items-center flex-1 text-center">
-              <div className="w-20 h-20 p-2 bg-gray-800/90 rounded-3xl flex items-center justify-center mb-2 ring-2 ring-purple-500/40 shadow-xl">
-                <img 
-                  src={bet.away_logo || getLogoUrl(awayTeam)} 
-                  alt={awayTeam} 
-                  className="max-w-full max-h-full object-contain filter drop-shadow-lg"
-                  onError={(e) => { e.currentTarget.src = getLogoUrl(awayTeam); }}
-                />
-              </div>
+              <TeamBadge teamName={awayTeam} logoUrl={bet.away_logo} size="lg" className="mb-2 !w-18 !h-18" />
               <h3 className="font-bold text-white text-base leading-tight">{awayTeam}</h3>
               <span className="text-[11px] text-gray-400 mt-0.5">Гости</span>
             </div>

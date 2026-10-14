@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
   Target, TrendingUp, Users, Shield, Sparkles, ChevronRight, 
-  Clock, MessageSquare, Flame 
+  Clock, MessageSquare, Flame, Radio 
 } from 'lucide-react';
 import MatchDetailModal from './MatchDetailModal';
+import TeamBadge from './TeamBadge';
 
 const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   if (!outcome) return '';
@@ -230,12 +231,26 @@ const TopBetCard = ({ bet }) => {
     ? bet.match_name.split(' vs ') 
     : bet.match_name.split(' - ');
 
-  const getLogoUrl = (teamName) => 
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=1e293b&color=38bdf8&size=64&bold=true&rounded=true`;
-
   const sportDisplay = getSportDisplay(bet.sport_type, bet.league);
   const totalCappersCount = bet.all_predictions?.length || bet.supporting_sources?.length || 0;
   const mskTime = formatCardMoscowTime(bet.match_date);
+
+  // Определение Live-статуса: матч начался и идёт прямо сейчас (до 2.5 часов от старта)
+  const isMatchLive = () => {
+    if (bet.final_score_home !== null || bet.final_score_away !== null || !bet.match_date) return false;
+    try {
+      let cleanStr = String(bet.match_date).trim().replace(' ', 'T');
+      if (!cleanStr.includes('Z') && !cleanStr.includes('+') && !cleanStr.slice(10).includes('-')) {
+        cleanStr = `${cleanStr}+03:00`;
+      }
+      const start = new Date(cleanStr).getTime();
+      const now = Date.now();
+      return now >= start && now <= (start + 135 * 60 * 1000);
+    } catch (e) {
+      return false;
+    }
+  };
+  const isLive = isMatchLive();
 
   const sourcesList = (bet.supporting_sources || []).map(s => {
     return s.replace(/\s*\(Рейтинг:.*?\)/g, '').trim();
@@ -253,7 +268,7 @@ const TopBetCard = ({ bet }) => {
         <div className={`absolute top-0 right-0 w-32 h-32 opacity-10 rounded-bl-full pointer-events-none blur-xl ${colorClass}`}></div>
 
         <div>
-          {/* ВЕРХНЯЯ ШАПКА: Вид спорта СЛЕВА (Футбол, Хоккей и т.д.), Время СПРАВА */}
+          {/* ВЕРХНЯЯ ШАПКА: Вид спорта СЛЕВА (Футбол, Хоккей и т.д.), Время/LIVE СПРАВА */}
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r ${sportDisplay.color} rounded-full text-xs font-black border shadow-sm shrink-0`}>
@@ -264,14 +279,20 @@ const TopBetCard = ({ bet }) => {
               </span>
             </div>
 
-            {/* Аккуратная плашка времени по Москве */}
-            {bet.match_date && (
+            {/* Аккуратная плашка времени по Москве или LIVE */}
+            {isLive ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-950/80 rounded-xl border border-red-500/50 text-xs font-black text-red-200 shrink-0 shadow-lg shadow-red-500/20 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0"></span>
+                <span className="font-extrabold uppercase tracking-wider text-red-300">LIVE</span>
+                <span className="text-[10px] text-red-400 font-semibold hidden sm:inline">• ИДЁТ</span>
+              </div>
+            ) : bet.match_date ? (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-950/90 rounded-xl border border-gray-700/80 text-xs font-black text-gray-200 shrink-0 shadow-inner">
                 <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                 <span className="whitespace-nowrap">{mskTime.dateStr}, {mskTime.timeStr}</span>
                 <span className="text-[10px] text-blue-400 font-black uppercase tracking-wider">МСК</span>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* ПОДШАПКА: Статус "Ставка Дня" + Лига с флагом страны */}
@@ -301,14 +322,7 @@ const TopBetCard = ({ bet }) => {
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-3 bg-gray-950/50 rounded-2xl border border-gray-800/70 mb-4">
             {/* Хозяева */}
             <div className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 p-2 bg-gray-850 rounded-2xl flex items-center justify-center mb-1.5 ring-1 ring-gray-700 shadow-md group-hover:ring-blue-500/50 group-hover:scale-105 transition-all">
-                <img 
-                  src={bet.home_logo || getLogoUrl(homeTeam)} 
-                  alt={homeTeam} 
-                  className="max-w-full max-h-full object-contain filter drop-shadow-md"
-                  onError={(e) => { e.currentTarget.src = getLogoUrl(homeTeam); }}
-                />
-              </div>
+              <TeamBadge teamName={homeTeam} logoUrl={bet.home_logo} size="lg" className="mb-2" />
               <span className="text-xs font-bold text-white leading-tight min-h-[2.4rem] flex items-center justify-center line-clamp-2 px-1">
                 {homeTeam}
               </span>
@@ -324,6 +338,10 @@ const TopBetCard = ({ bet }) => {
                   </div>
                   <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mt-0.5">ФИНАЛ</span>
                 </div>
+              ) : isLive ? (
+                <span className="w-8 h-8 rounded-full bg-red-950/90 border border-red-500/50 flex items-center justify-center text-[10px] font-black text-red-300 shadow-lg shadow-red-500/20 animate-pulse">
+                  LIVE
+                </span>
               ) : (
                 <span className="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] font-black text-gray-400 italic shadow-inner">
                   VS
@@ -333,14 +351,7 @@ const TopBetCard = ({ bet }) => {
 
             {/* Гости */}
             <div className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 p-2 bg-gray-850 rounded-2xl flex items-center justify-center mb-1.5 ring-1 ring-gray-700 shadow-md group-hover:ring-purple-500/50 group-hover:scale-105 transition-all">
-                <img 
-                  src={bet.away_logo || getLogoUrl(awayTeam)} 
-                  alt={awayTeam} 
-                  className="max-w-full max-h-full object-contain filter drop-shadow-md"
-                  onError={(e) => { e.currentTarget.src = getLogoUrl(awayTeam); }}
-                />
-              </div>
+              <TeamBadge teamName={awayTeam} logoUrl={bet.away_logo} size="lg" className="mb-2" />
               <span className="text-xs font-bold text-white leading-tight min-h-[2.4rem] flex items-center justify-center line-clamp-2 px-1">
                 {awayTeam}
               </span>
