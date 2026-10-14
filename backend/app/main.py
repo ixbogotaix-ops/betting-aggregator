@@ -24,6 +24,8 @@ app.add_middleware(
         "http://45.84.222.76",
         "http://dthenbk.duckdns.org",
         "https://dthenbk.duckdns.org",
+        "https://dthenbk.duckdns.org:8444",
+        "http://dthenbk.duckdns.org:8444",
     ],
     allow_credentials=True,
     allow_methods=["*"],

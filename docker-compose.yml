@@ -22,6 +22,9 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "8444:8444"
+    volumes:
+      - ./certs:/etc/letsencrypt:ro
     depends_on:
       - backend
     networks:
