@@ -127,21 +127,40 @@ def evaluate_bet_outcome(outcome_str: str, home_score: int, away_score: int, hom
             return ResultStatus.loss
 
     # 5. Форы (Ф1 / Ф2)
-    f1_match = re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', raw)
-    if f1_match:
-        val = float(f1_match.group(1).replace(',', '.'))
-        adjusted = diff_home + val
-        if adjusted > 0:
-            return ResultStatus.win
-        elif adjusted == 0:
-            return ResultStatus.refund
-        else:
-            return ResultStatus.loss
+    is_handicap = any(k in raw for k in ['фора', 'handicap', 'азиатская фора']) or re.search(r'\b(ф1|ф2|ah1|ah2|ах1|ах2)\b', raw) or 'с форой' in raw
+    if is_handicap:
+        val_m = re.search(r'\(\s*([\+\-]?\d+[\.,]?\d*)\s*\)', raw)
+        if not val_m:
+            val_m = re.search(r'[\+\-]\d+[\.,]?\d*', raw)
+        if not val_m:
+            val_m = re.search(r'(?:фора|handicap|ф[12]?)\s*(?:[12]|хозяев|гостей|[^\d\(\)]+)?\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', raw)
+        val = float(val_m.group(1).replace(',', '.')) if val_m else 0.0
 
-    f2_match = re.search(r'(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', raw)
-    if f2_match:
-        val = float(f2_match.group(1).replace(',', '.'))
-        adjusted = diff_away + val
+        is_t2 = bool(
+            re.search(r'(?:фора|handicap|ф|ah|ах|форой)\s*2\b', raw)
+            or re.search(r'\b(ф2|ah2|ах2|гост\w*|втор\w*)\b', raw)
+            or (away_team and is_team(raw, away_team))
+            or '(ф2)' in raw
+        )
+        is_t1 = bool(
+            re.search(r'(?:фора|handicap|ф|ah|ах|форой)\s*1\b', raw)
+            or re.search(r'\b(ф1|ah1|ах1|хозя\w*|перв\w*)\b', raw)
+            or (home_team and is_team(raw, home_team))
+            or '(ф1)' in raw
+        )
+
+        if is_t2 and not is_t1:
+            adjusted = diff_away + val
+        elif is_t1 and not is_t2:
+            adjusted = diff_home + val
+        elif is_t2 and is_t1:
+            if away_team and is_team(raw, away_team):
+                adjusted = diff_away + val
+            else:
+                adjusted = diff_home + val
+        else:
+            adjusted = diff_home + val
+
         if adjusted > 0:
             return ResultStatus.win
         elif adjusted == 0:
@@ -150,13 +169,14 @@ def evaluate_bet_outcome(outcome_str: str, home_score: int, away_score: int, hom
             return ResultStatus.loss
 
     # 6. Победа 2 / Гости (П2)
+    has_market_term = any(k in raw for k in ['фора', 'handicap', 'тб', 'тм', 'тотал', 'итб', 'итм', 'тайм', 'период', 'сет', 'гол'])
     if (
         raw in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды", "победа второй"]
         or re.search(r'\b(победа\s*2|победа\s*гостей|победа\s*второй)\b', raw)
         or re.search(r'\(п2\)', raw)
         or re.fullmatch(r'п2[\.\s]*', raw)
         or re.fullmatch(r'w2[\.\s]*', raw)
-        or (away_team and is_team(raw, away_team))
+        or (away_team and not has_market_term and is_team(raw, away_team))
     ):
         return ResultStatus.win if away_score > home_score else ResultStatus.loss
 
@@ -167,7 +187,7 @@ def evaluate_bet_outcome(outcome_str: str, home_score: int, away_score: int, hom
         or re.search(r'\(п1\)', raw)
         or re.fullmatch(r'п1[\.\s]*', raw)
         or re.fullmatch(r'w1[\.\s]*', raw)
-        or (home_team and is_team(raw, home_team))
+        or (home_team and not has_market_term and is_team(raw, home_team))
     ):
         return ResultStatus.win if home_score > away_score else ResultStatus.loss
 

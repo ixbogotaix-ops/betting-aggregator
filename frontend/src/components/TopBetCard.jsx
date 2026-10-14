@@ -6,104 +6,171 @@ import {
 import MatchDetailModal from './MatchDetailModal';
 import TeamBadge from './TeamBadge';
 
-const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
+export const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   if (!outcome) return '';
-  
+
   // Очищаем от суффиксов источников в скобках
   let clean = outcome.replace(/\s*\((?:stavka tv|legalbet|vprognoze|br|betting|tg|statarea|pinnacle)\b.*?\)/gi, '').trim().replace(/\.$/, '').trim();
   const low = clean.toLowerCase();
-  
+
+  // 0. Идемпотентность: если уже идеально отформатировано
+  if (/^фора\s+(?!1\b|2\b|хозя|гост).+?\s+\([\+\-]?\d+[\.,]?\d*\)\s+\(ф[12]\)$/i.test(clean)) return clean;
+  if (/^фора\s+(?!1\b|2\b|хозя|гост).+?\s+\(0\)$/i.test(clean)) return clean;
+  if (/^индивидуальный тотал\s+(?!1\b|2\b|хозя|гост).+?\s+(больше|меньше)\s+\d+[\.,]?\d*\s+\(ит[12][бм]\s+\d+[\.,]?\d*\)$/i.test(clean)) return clean;
+  if (/^тотал\s+(больше|меньше)\s+\d+[\.,]?\d*\s+\(т[бм]\s+\d+[\.,]?\d*\)$/i.test(clean)) return clean;
+  if (/^обе забьют\s*—\s*(да|нет)\s+\(оз:\s*(да|нет)\)$/i.test(clean)) return clean;
+  if (/^(?!1\b|2\b|хозя|гост).+?\s+не проиграет\s+\((1x|x2)\)$/i.test(clean)) return clean;
+  if (/^победа\s+(?!1\b|2\b|хозя|гост).+?\s+\(п[12]\)$/i.test(clean)) return clean;
+  if (['ничья (х)', 'победа 1 или 2 (12)'].includes(low)) return clean;
+
   const cleanMatch = (str, target) => {
     if (!str || !target) return false;
     const s = str.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
     const t = target.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    if (t.length < 3) return false;
     return s.includes(t) || t.includes(s);
   };
 
+  const isStrictTeam = (str, target) => {
+    if (!str || !target) return false;
+    const s = str.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    const t = target.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    return s === t;
+  };
+
   // 1. Тайм / Матч (КРИТИЧЕСКИ ВАЖНО: отделять от ординаров П1/П2!)
-  if (low.includes('тайм / матч') || low.includes('тайм/матч') || low.includes('тайм-матч') || low.includes('т/м:') || /\b(н\/п1|н\/п2|п1\/п1|п2\/п2|п1\/н|п2\/н|п1\/п2|п2\/п1)\b/i.test(low)) {
+  if (low.includes('тайм / матч') || low.includes('тайм/матч') || low.includes('тайм-матч') || low.includes('т/м:') || /(?:^|[^\wа-яё])(?:н\/п1|н\/п2|п1\/п1|п2\/п2|п1\/н|п2\/н|п1\/п2|п2\/п1)(?=[^\wа-яё]|$)/i.test(low)) {
     const cleanTm = clean.replace(/тайм\s*[\/\-]\s*матч\s*[\-—:]\s*/gi, '').trim();
     return `Тайм/Матч: ${cleanTm}`;
   }
 
   // 2. Комбинированные ставки
-  if (low.includes(' и тб') || low.includes(' и тм') || low.includes(' + тб') || low.includes(' + тм') || low.includes(' и оз') || low.includes(' + оз') || low.includes('+ тм') || low.includes('+ тб')) {
+  if (low.includes(' и тб') || low.includes(' и тм') || low.includes(' + тб') || low.includes(' + тм') || low.includes(' и оз') || low.includes(' + оз') || low.includes('+ тм') || low.includes('+ тб') || low.includes('+оз') || low.includes('+тб') || low.includes('+тм')) {
     return clean;
   }
 
-  // 2.1 Индивидуальные тоталы (ИТБ / ИТМ)
-  const itb = low.match(/(?:итб\s*([12])|ит([12])б|индивидуальный\s*тотал\s*([12])\s*больше)\s*\(?(\d+[\.,]?\d*)\)?/i);
-  if (itb) {
-    const teamNum = itb[1] || itb[2] || itb[3];
-    const val = itb[4].replace(',', '.');
-    const teamName = teamNum === '1' ? homeTeam : awayTeam;
-    return teamName ? `Индивидуальный Тотал ${teamName} Больше ${val} (ИТБ${teamNum} ${val})` : `ИТБ${teamNum} (${val})`;
-  }
-  const itm = low.match(/(?:итм\s*([12])|ит([12])м|индивидуальный\s*тотал\s*([12])\s*меньше)\s*\(?(\d+[\.,]?\d*)\)?/i);
-  if (itm) {
-    const teamNum = itm[1] || itm[2] || itm[3];
-    const val = itm[4].replace(',', '.');
-    const teamName = teamNum === '1' ? homeTeam : awayTeam;
-    return teamName ? `Индивидуальный Тотал ${teamName} Меньше ${val} (ИТМ${teamNum} ${val})` : `ИТМ${teamNum} (${val})`;
+  // 3. Индивидуальные тоталы (ИТБ / ИТМ)
+  if (low.includes('итб') || low.includes('итм') || low.includes('индивидуальный') || low.includes('ит1') || low.includes('ит2')) {
+    const itb = low.match(/(?:итб\s*([12])|ит([12])б|индивидуальный\s*тотал\s*([12])\s*больше|итб|индивидуальный\s*тотал.*?больше)\s*\(?(\d+[\.,]?\d*)\)?/i);
+    if (itb) {
+      let teamNum = itb[1] || itb[2] || itb[3];
+      const val = (itb[4] || '1.5').replace(',', '.');
+      if (!teamNum) {
+        teamNum = (/(?:^|[^\wа-яё])(?:гост\w*|втор\w*)(?=[^\wа-яё]|$)/i.test(low) || (awayTeam && cleanMatch(low, awayTeam))) ? '2' : '1';
+      }
+      const teamName = teamNum === '2' ? awayTeam : homeTeam;
+      return teamName ? `Индивидуальный Тотал ${teamName} Больше ${val} (ИТБ${teamNum} ${val})` : `ИТБ${teamNum} (${val})`;
+    }
+    const itm = low.match(/(?:итм\s*([12])|ит([12])м|индивидуальный\s*тотал\s*([12])\s*меньше|итм|индивидуальный\s*тотал.*?меньше)\s*\(?(\d+[\.,]?\d*)\)?/i);
+    if (itm) {
+      let teamNum = itm[1] || itm[2] || itm[3];
+      const val = (itm[4] || '1.5').replace(',', '.');
+      if (!teamNum) {
+        teamNum = (/(?:^|[^\wа-яё])(?:гост\w*|втор\w*)(?=[^\wа-яё]|$)/i.test(low) || (awayTeam && cleanMatch(low, awayTeam))) ? '2' : '1';
+      }
+      const teamName = teamNum === '2' ? awayTeam : homeTeam;
+      return teamName ? `Индивидуальный Тотал ${teamName} Меньше ${val} (ИТМ${teamNum} ${val})` : `ИТМ${teamNum} (${val})`;
+    }
   }
 
-  // 3. Обе забьют (ОЗ)
-  if (/\b(оз|обе\s*забьют|обе\s*команды\s*забьют)\b/i.test(low)) {
+  // 4. Обе забьют (ОЗ)
+  if (/(?:^|[^\wа-яё])(?:оз|обе\s*забьют|обе\s*команды\s*забьют)(?=[^\wа-яё]|$)/i.test(low)) {
     if (low.includes('нет') || low.includes('no') || low.includes('не забьют') || low.includes('— нет') || low.includes('- нет')) {
       return 'Обе забьют — Нет (ОЗ: Нет)';
     }
     return 'Обе забьют — Да (ОЗ: Да)';
   }
 
-  // 4. Двойной шанс
-  if (/\b(1x|1х)\b/i.test(low) || (low.includes('не проиграет') && (low.includes('1') || low.includes('хозя') || cleanMatch(low, homeTeam)))) {
+  // 5. Двойной шанс: 1X, X2, 12
+  if (/(?:^|[^\wа-яё])(?:1x|1х)(?=[^\wа-яё]|$)/i.test(low) || (low.includes('не проиграет') && (/(?:^|[^\wа-яё])(?:1|хозя\w*)(?=[^\wа-яё]|$)/i.test(low) || cleanMatch(low, homeTeam)))) {
     return homeTeam ? `${homeTeam} не проиграет (1X)` : '1X (Хозяева не проиграют)';
   }
-  if (/\b(x2|х2)\b/i.test(low) || (low.includes('не проиграет') && (low.includes('2') || low.includes('гост') || cleanMatch(low, awayTeam)))) {
+  if (/(?:^|[^\wа-яё])(?:x2|х2)(?=[^\wа-яё]|$)/i.test(low) || (low.includes('не проиграет') && (/(?:^|[^\wа-яё])(?:2|гост\w*)(?=[^\wа-яё]|$)/i.test(low) || cleanMatch(low, awayTeam)))) {
     return awayTeam ? `${awayTeam} не проиграет (X2)` : 'X2 (Гости не проиграют)';
   }
   if (low === '12' || low.includes('победа 1 или 2')) {
     return 'Победа 1 или 2 (12)';
   }
 
-  // 5. Ничья
-  if (['draw', 'x', 'х', 'ничья', 'х.', 'x.'].includes(low) || low.startsWith('ничья')) {
+  // 6. Ничья
+  if (['draw', 'x', 'х', 'ничья', 'х.', 'x.'].includes(low) || low.startsWith('ничья') || low === 'мир') {
     return 'Ничья (Х)';
   }
 
-  // 6. Форы
-  const f1 = low.match(/(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
-  if (f1) {
-    const v = f1[1].replace(',', '.');
-    return homeTeam ? `Фора ${homeTeam} (${v}) (Ф1)` : `Фора 1 (${v})`;
-  }
-  const f2 = low.match(/(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
-  if (f2) {
-    const v = f2[1].replace(',', '.');
-    return awayTeam ? `Фора ${awayTeam} (${v}) (Ф2)` : `Фора 2 (${v})`;
+  // 7. Форы (Handicaps)
+  const isHandicap = ['фора', 'handicap', 'азиатская фора'].some(k => low.includes(k)) || /(?:^|[^\wа-яё])(?:ф1|ф2|ah1|ah2|ах1|ах2)(?=[^\wа-яё]|$)/i.test(low) || low.includes('с форой');
+  if (isHandicap) {
+    let valM = low.match(/\(\s*([\+\-]?\d+[\.,]?\d*)\s*\)/);
+    if (!valM) valM = low.match(/[\+\-]\d+[\.,]?\d*/);
+    if (!valM) valM = low.match(/(?:фора|handicap|ф[12]?)\s*(?:[12]|хозяев|гостей|[^\d\(\)]+)?\s*\(?([\+\-]?\d+[\.,]?\d*)\)?/i);
+    const val = valM ? valM[1].replace(',', '.') : '0';
+
+    const isT2 = /(?:фора|handicap|ф|ah|ах|форой)\s*2(?=[^\wа-яё]|$)/i.test(low)
+      || /(?:^|[^\wа-яё])(?:ф2|ah2|ах2|гост\w*|втор\w*)(?=[^\wа-яё]|$)/i.test(low)
+      || (awayTeam && cleanMatch(low, awayTeam))
+      || low.includes('(ф2)');
+
+    const isT1 = /(?:фора|handicap|ф|ah|ах|форой)\s*1(?=[^\wа-яё]|$)/i.test(low)
+      || /(?:^|[^\wа-яё])(?:ф1|ah1|ах1|хозя\w*|перв\w*)(?=[^\wа-яё]|$)/i.test(low)
+      || (homeTeam && cleanMatch(low, homeTeam))
+      || low.includes('(ф1)');
+
+    if (isT2 && !isT1) {
+      const teamLabel = awayTeam || '2';
+      const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф2)' : '';
+      return `Фора ${teamLabel} (${val})${suffix}`;
+    } else if (isT1 && !isT2) {
+      const teamLabel = homeTeam || '1';
+      const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф1)' : '';
+      return `Фора ${teamLabel} (${val})${suffix}`;
+    } else if (isT2 && isT1) {
+      if (awayTeam && cleanMatch(low, awayTeam)) {
+        const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф2)' : '';
+        return `Фора ${awayTeam} (${val})${suffix}`;
+      }
+      const suffix = (val !== '0' && val !== '+0' && val !== '-0') ? ' (Ф1)' : '';
+      return `Фора ${homeTeam} (${val})${suffix}`;
+    } else {
+      return `Фора (${val})`;
+    }
   }
 
-  // 7. Тоталы
-  const tb = low.match(/(?:тб|больше|over)\s*\(?(\d+[\.,]?\d*)\)?/i);
-  if (tb) {
-    const v = tb[1].replace(',', '.');
-    return `Тотал Больше ${v} (ТБ ${v})`;
-  }
-  const tm = low.match(/(?:тм|меньше|under)\s*\(?(\d+[\.,]?\d*)\)?/i);
-  if (tm) {
-    const v = tm[1].replace(',', '.');
-    return `Тотал Меньше ${v} (ТМ ${v})`;
-  }
-  const tot = low.match(/тотал\s*(\d+[\.,]?\d*)/i);
-  if (tot) {
-    const v = tot[1].replace(',', '.');
-    return `Тотал Больше ${v} (ТБ ${v})`;
+  // 8. Тоталы (ТБ / ТМ)
+  const isTot = ['тотал', 'total', 'больше', 'меньше', 'over', 'under'].some(k => low.includes(k)) 
+    || /(?:^|[^\wа-яё])(?:тб|тм)(?=[^\wа-яё]|$)/i.test(low) 
+    || /[\d\.,\(\)]+\s*[бмбm](?=[^\wа-яё]|$)/i.test(low);
+  if (isTot) {
+    const totValM = low.match(/(\d+[\.,]?\d*)/);
+    if (totValM) {
+      const val = totValM[1].replace(',', '.');
+      const isUnder = /(?:^|[^\wа-яё])(?:тм|меньше|under)(?=[^\wа-яё]|$)/i.test(low) || /[\d\.,\(\)]+\s*[мm](?=[^\wа-яё]|$)/i.test(low);
+      const isOver = /(?:^|[^\wа-яё])(?:тб|больше|over)(?=[^\wа-яё]|$)/i.test(low) || /[\d\.,\(\)]+\s*[бb](?=[^\wа-яё]|$)/i.test(low);
+      if (isUnder && !isOver) return `Тотал Меньше ${val} (ТМ ${val})`;
+      if (isOver && !isUnder) return `Тотал Больше ${val} (ТБ ${val})`;
+      if (isUnder && isOver) {
+        if (low.includes('меньше') || low.includes('тм') || low.includes('under') || /[\d\.,\(\)]+\s*[мm](?=[^\wа-яё]|$)/i.test(low)) {
+          return `Тотал Меньше ${val} (ТМ ${val})`;
+        }
+        return `Тотал Больше ${val} (ТБ ${val})`;
+      }
+      return `Тотал Больше ${val} (ТБ ${val})`;
+    }
   }
 
-  // 8. ЧИСТАЯ Победа 2 / Гости (П2)
+  // 9. Победа с учетом ОТ
+  if (['с учетом от', 'с учётом от', 'от и булл', 'с от'].some(k => low.includes(k))) {
+    if (low.includes('1') || (homeTeam && cleanMatch(low, homeTeam))) {
+      return homeTeam ? `Победа ${homeTeam} (с ОТ) (П1)` : 'Победа 1 (с ОТ)';
+    }
+    if (low.includes('2') || (awayTeam && cleanMatch(low, awayTeam))) {
+      return awayTeam ? `Победа ${awayTeam} (с ОТ) (П2)` : 'Победа 2 (с ОТ)';
+    }
+  }
+
+  // 10. ЧИСТАЯ Победа 2 / Гости (П2)
   if (
     ['away_win', 'п2', 'w2', '2', 'победа 2', 'победа2', 'победа гостей', 'победа второй команды', 'победа второй'].includes(low) ||
-    /\b(победа\s*2|победа\s*гостей|победа\s*второй)\b/i.test(low) ||
+    /(?:^|[^\wа-яё])(?:победа\s*2|победа\s*гостей|победа\s*второй)(?=[^\wа-яё]|$)/i.test(low) ||
     /\(п2\)/i.test(low) ||
     /^п2[\.\s]*$/i.test(low) ||
     /^w2[\.\s]*$/i.test(low) ||
@@ -112,10 +179,10 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     return awayTeam ? `Победа ${awayTeam} (П2)` : 'Победа Гостей (П2)';
   }
 
-  // 9. ЧИСТАЯ Победа 1 / Хозяева (П1)
+  // 11. ЧИСТАЯ Победа 1 / Хозяева (П1)
   if (
     ['home_win', 'п1', 'w1', '1', 'победа 1', 'победа1', 'победа хозяев', 'победа первой команды', 'победа первой'].includes(low) ||
-    /\b(победа\s*1|победа\s*хозяев|победа\s*первой)\b/i.test(low) ||
+    /(?:^|[^\wа-яё])(?:победа\s*1|победа\s*хозяев|победа\s*первой)(?=[^\wа-яё]|$)/i.test(low) ||
     /\(п1\)/i.test(low) ||
     /^п1[\.\s]*$/i.test(low) ||
     /^w1[\.\s]*$/i.test(low) ||
@@ -124,27 +191,21 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
     return homeTeam ? `Победа ${homeTeam} (П1)` : 'Победа Хозяев (П1)';
   }
 
-  // 10. Победа: Название команды
+  // 12. Победа: Название команды
   if (low.startsWith('победа:') || low.startsWith('победа ')) {
     const teamPart = low.includes(':') ? low.split(':')[1].trim() : low.replace('победа', '').trim();
-    if (!['тотал', 'тб', 'тм', 'тайм', 'фора'].some(k => teamPart.includes(k))) {
-      if (awayTeam && cleanMatch(teamPart, awayTeam)) {
-        return `Победа ${awayTeam} (П2)`;
-      }
-      if (homeTeam && cleanMatch(teamPart, homeTeam)) {
-        return `Победа ${homeTeam} (П1)`;
-      }
-      if (teamPart) {
-        return `Победа ${teamPart}`;
-      }
+    if (!['тотал', 'тб', 'тм', 'тайм', 'фора', 'гол', 'карт', 'угл'].some(k => teamPart.includes(k))) {
+      if (awayTeam && cleanMatch(teamPart, awayTeam)) return `Победа ${awayTeam} (П2)`;
+      if (homeTeam && cleanMatch(teamPart, homeTeam)) return `Победа ${homeTeam} (П1)`;
+      if (teamPart) return `Победа ${teamPart}`;
     }
   }
 
-  if (awayTeam && cleanMatch(low, awayTeam)) {
-    return `Победа ${awayTeam} (П2)`;
-  }
-  if (homeTeam && cleanMatch(low, homeTeam)) {
-    return `Победа ${homeTeam} (П1)`;
+  // 13. Исход СТРОГО равен названию одной из команд (только если нет спец-маркетов)
+  const hasMarketWords = ['гол', 'тайм', 'период', 'карт', 'угл', 'сет', 'очк', 'шайб', 'брос', 'сух'].some(k => low.includes(k));
+  if (!hasMarketWords) {
+    if (awayTeam && isStrictTeam(clean, awayTeam)) return `Победа ${awayTeam} (П2)`;
+    if (homeTeam && isStrictTeam(clean, homeTeam)) return `Победа ${homeTeam} (П1)`;
   }
 
   return clean;
