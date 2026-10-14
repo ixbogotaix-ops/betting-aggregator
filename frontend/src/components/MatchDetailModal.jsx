@@ -48,7 +48,7 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   }
 
   // 3. Обе забьют (ОЗ)
-  if (low.includes('оз') || low.includes('обе забьют')) {
+  if (/\b(оз|обе\s*забьют|обе\s*команды\s*забьют)\b/i.test(low)) {
     if (low.includes('нет') || low.includes('no') || low.includes('не забьют') || low.includes('— нет') || low.includes('- нет')) {
       return 'Обе забьют — Нет (ОЗ: Нет)';
     }
@@ -346,9 +346,16 @@ const MatchDetailModal = ({ bet, onClose }) => {
                     </span>
                   )}
                 </div>
-                <span className="text-lg font-black text-white leading-tight">
-                  {formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-lg font-black text-white leading-tight">
+                    {formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}
+                  </span>
+                  {bet.value_badge && (
+                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                      {bet.value_badge}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="text-right shrink-0">

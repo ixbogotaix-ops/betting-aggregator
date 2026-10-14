@@ -8,11 +8,25 @@ import cloudscraper
 from bs4 import BeautifulSoup
 
 from app.database import AsyncSessionLocal
-from app.models import Match, Source, Prediction, SourceType
+from app.models import Match, Source, Prediction, SourceType, MatchStatus
 from sqlalchemy import select
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
+
+def detect_sport(text: str = "", league: str = "", teams: str = "") -> str:
+    s = f"{text} {league} {teams}".lower()
+    if any(k in s for k in ["хоккей", "кхл", "нхл", "вхл", "мхл", "hockey", "nhl", "khl", "шайб", "буллит", "овертайм", "ска-", "нефтяник"]):
+        return "Hockey"
+    if any(k in s for k in ["баскетбол", "nba", "нба", "евролига", "втб", "basketball", "euroleague"]):
+        return "Basketball"
+    if any(k in s for k in ["теннис", "atp", "wta", "itf", "tennis", "сет", "гейм", "паолини", "картал", "джокович", "алькарас"]):
+        return "Tennis"
+    if any(k in s for k in ["mma", "ufc", "мма", "юфс", "бокс", "boxing", "бой"]):
+        return "MMA"
+    if any(k in s for k in ["esport", "киберспорт", "cs:go", "cs2", "dota", "valorant"]):
+        return "Esports"
+    return "Football"
 
 def clean_name(name: str) -> str:
     name = unidecode(name).lower()
@@ -98,27 +112,40 @@ async def scrape_bookmaker_ratings():
                     team1 = strings[-6].strip()
                     
                 matched_match = match_teams(team1, team2, real_matches)
-                if matched_match:
-                    existing = await session.execute(
-                        select(Prediction).where(
-                            Prediction.match_id == matched_match.id,
-                            Prediction.source_id == source.id
-                        )
+                if not matched_match:
+                    sport_name = detect_sport(a.text, teams=f"{team1} {team2}")
+                    matched_match = Match(
+                        sport_type=sport_name,
+                        league="Линия Рейтинг Букмекеров",
+                        home_team=team1,
+                        away_team=team2,
+                        match_date=datetime.now(timezone.utc) + timedelta(hours=3),
+                        status=MatchStatus.upcoming
                     )
-                    if existing.scalars().first() is None:
-                        reasoning_br = " ".join(strings[:4]) if len(strings) >= 4 else a.text.strip()
-                        pred = Prediction(
-                            match_id=matched_match.id,
-                            source_id=source.id,
-                            predicted_outcome=outcome_str.strip(),
-                            odds=odds,
-                            confidence_score=60.0,
-                            reasoning=reasoning_br[:600],
-                            created_at=datetime.now(timezone.utc)
-                        )
-                        session.add(pred)
-                        new_predictions += 1
-                        logger.info(f"Added BR prediction for {team1} vs {team2}: {outcome_str}")
+                    session.add(matched_match)
+                    await session.flush()
+                    real_matches.append(matched_match)
+
+                existing = await session.execute(
+                    select(Prediction).where(
+                        Prediction.match_id == matched_match.id,
+                        Prediction.source_id == source.id
+                    )
+                )
+                if existing.scalars().first() is None:
+                    reasoning_br = " ".join(strings[:4]) if len(strings) >= 4 else a.text.strip()
+                    pred = Prediction(
+                        match_id=matched_match.id,
+                        source_id=source.id,
+                        predicted_outcome=outcome_str.strip(),
+                        odds=odds,
+                        confidence_score=75.0,
+                        reasoning=reasoning_br[:600],
+                        created_at=datetime.now(timezone.utc)
+                    )
+                    session.add(pred)
+                    new_predictions += 1
+                    logger.info(f"Added BR prediction for {team1} vs {team2}: {outcome_str} (odds={odds})")
             except Exception as e:
                 logger.warning(f"Error parsing BR card: {e}")
                 

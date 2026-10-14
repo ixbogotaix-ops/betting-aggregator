@@ -3,63 +3,78 @@ import random
 import logging
 import asyncio
 import aiohttp
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bs4 import BeautifulSoup
 from thefuzz import fuzz
 from unidecode import unidecode
 
 logger = logging.getLogger(__name__)
 
+def detect_sport(text: str = "", league: str = "", teams: str = "") -> str:
+    s = f"{text} {league} {teams}".lower()
+    if any(k in s for k in ["хоккей", "кхл", "нхл", "вхл", "мхл", "hockey", "nhl", "khl", "шайб", "буллит", "овертайм", "ска-", "нефтяник"]):
+        return "Hockey"
+    if any(k in s for k in ["баскетбол", "nba", "нба", "евролига", "втб", "basketball", "euroleague"]):
+        return "Basketball"
+    if any(k in s for k in ["теннис", "atp", "wta", "itf", "tennis", "сет", "гейм", "паолини", "картал", "джокович", "алькарас"]):
+        return "Tennis"
+    if any(k in s for k in ["mma", "ufc", "мма", "юфс", "бокс", "boxing", "бой"]):
+        return "MMA"
+    if any(k in s for k in ["esport", "киберспорт", "cs:go", "cs2", "dota", "valorant"]):
+        return "Esports"
+    return "Football"
+
+def extract_teams_from_post(text: str):
+    """Извлекает пару команд из текста поста каппера, если матча нет в активных API-матчах"""
+    # Удаляем кавычки и лишние символы
+    text_clean = re.sub(r'[«»\"\'\(\)]', ' ', text)
+    # Разбиваем по строкам и предложениям (точка, точка с запятой, перенос строки)
+    segments = [s.strip() for s in re.split(r'[\n\.;]+', text_clean) if s.strip()]
+    stop_words = ["ставка", "прогноз", "кэф", "коэф", "кф", "рублей", "канал", "подписк", "https", "t.me", "http", "лесенка", "марафон", "банк", "vip", "время", "мск", "коэффициент", "форы", "тотал", "победа", "турнир", "кубок", "чемпионат", "премьер-лига"]
+    separators = [r'\s+[—–]\s+', r'\s+vs\.?\s+', r'\s+против\s+', r'\s+-\s+']
+    
+    for seg in segments:
+        seg_clean = re.sub(r'^[⚽🏒🏀🎾🥊🎮🔥💰🏆🎯🚀💎📌\s]+', '', seg).strip()
+        if any(w in seg_clean.lower() for w in stop_words):
+            continue
+        if len(seg_clean) < 4 or len(seg_clean) > 70:
+            continue
+            
+        for sep_pattern in separators:
+            parts = re.split(sep_pattern, seg_clean, flags=re.IGNORECASE)
+            if len(parts) == 2:
+                t1 = re.sub(r'[^\w\s\.-]', '', parts[0]).strip()
+                t2 = re.sub(r'[^\w\s\.-]', '', parts[1]).strip()
+                t2 = re.sub(r'\s+\d{1,2}[:.]\d{2}.*$', '', t2).strip()
+                t2 = re.sub(r'\s+кф.*$', '', t2, flags=re.I).strip()
+                
+                if 2 <= len(t1) <= 30 and 2 <= len(t2) <= 30:
+                    banned_words = ["приложен", "сезон", "рекорд", "бонус", "скачат", "подпиш", "канал", "ссылк", "видео", "фото", "смотреть", "трансляци", "эфир", "конкурс", "розыгрыш", "фрибет", "рублей", "руб", "пост", "сайт"]
+                    if any(b in t1.lower() for b in banned_words) or any(b in t2.lower() for b in banned_words):
+                        continue
+                    if not re.search(r'\b(тб|тм|фора|итб|итм|оз|1x|x2)\b', t1.lower()) and not re.search(r'\b(тб|тм|фора|итб|итм|оз|1x|x2)\b', t2.lower()):
+                        return (t1, t2)
+    return None
+
 TARGET_CHANNELS = [
     # 📌 1. Официальные медиа и топ-верификаторы (Высший вес авторитета)
-    {"name": "legalbet", "url": "https://t.me/s/legalbet", "roi": 12.0, "winrate": 60.0, "total_bets": 1000},
+    {"name": "stavka_tv", "url": "https://t.me/s/stavka_tv", "roi": 13.5, "winrate": 62.0, "total_bets": 1200},
     {"name": "bookmaker_ratings", "url": "https://t.me/s/bookmaker_ratings", "roi": 10.5, "winrate": 58.0, "total_bets": 800},
-    {"name": "vprognoze", "url": "https://t.me/s/vprognoze", "roi": 9.0, "winrate": 56.0, "total_bets": 1500},
-    {"name": "intelbet", "url": "https://t.me/s/intelbet", "roi": 11.0, "winrate": 59.0, "total_bets": 700},
-    {"name": "stavka_tv", "url": "https://t.me/s/stavka_tv", "roi": 13.5, "winrate": 62.0, "total_bets": 900},
-    {"name": "bet_itors", "url": "https://t.me/s/bet_itors", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "capper_control", "url": "https://t.me/s/capper_control", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "odds_portal_ru", "url": "https://t.me/s/odds_portal_ru", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "metaratings_ru", "url": "https://t.me/s/metaratings_ru", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "championat_com", "url": "https://t.me/s/championat_com", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
+    {"name": "kushvsporte", "url": "https://t.me/s/kushvsporte", "roi": 12.0, "winrate": 60.0, "total_bets": 950},
+    {"name": "metaratings", "url": "https://t.me/s/metaratings", "roi": 10.0, "winrate": 56.0, "total_bets": 750},
+    {"name": "sportsru", "url": "https://t.me/s/sportsru", "roi": 9.5, "winrate": 55.0, "total_bets": 1000},
+    {"name": "championat", "url": "https://t.me/s/championat", "roi": 9.0, "winrate": 54.0, "total_bets": 1100},
+    {"name": "matchpremier", "url": "https://t.me/s/matchpremier", "roi": 11.0, "winrate": 57.0, "total_bets": 600},
 
-    # ⚽ 2. Футбол: Топ-лиги, кубки и блоги аналитиков
-    {"name": "football_hub_ru", "url": "https://t.me/s/football_hub_ru", "roi": 8.0, "winrate": 55.0, "total_bets": 400},
-    {"name": "capper_football", "url": "https://t.me/s/capper_football", "roi": 5.0, "winrate": 53.0, "total_bets": 300},
-    {"name": "goal_forecast", "url": "https://t.me/s/goal_forecast", "roi": 6.0, "winrate": 54.0, "total_bets": 200},
-    {"name": "euro_football_chat", "url": "https://t.me/s/euro_football_chat", "roi": 4.5, "winrate": 52.0, "total_bets": 250},
-    {"name": "russian_premier_league", "url": "https://t.me/s/russian_premier_league", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "champions_league_bets", "url": "https://t.me/s/champions_league_bets", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "tactical_board", "url": "https://t.me/s/tactical_board", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "corner_cards_bets", "url": "https://t.me/s/corner_cards_bets", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "xG_football_analytics", "url": "https://t.me/s/xG_football_analytics", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "foot_analytics_pro", "url": "https://t.me/s/foot_analytics_pro", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
+    # 📊 2. Ведущие аналитические линии букмекеров
+    {"name": "ligastavok", "url": "https://t.me/s/ligastavok", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
+    {"name": "fonbet_official", "url": "https://t.me/s/fonbet_official", "roi": 11.5, "winrate": 58.0, "total_bets": 800},
+    {"name": "betboom_ru", "url": "https://t.me/s/betboom_ru", "roi": 10.5, "winrate": 56.0, "total_bets": 700},
+    {"name": "olimpbet_official", "url": "https://t.me/s/olimpbet_official", "roi": 9.0, "winrate": 54.0, "total_bets": 500},
 
-    # 🏒 3. Хоккей (КХЛ, НХЛ)
-    {"name": "ice_hockey_bets", "url": "https://t.me/s/ice_hockey_bets", "roi": 9.5, "winrate": 57.0, "total_bets": 400},
-    {"name": "khl_analytics_pro", "url": "https://t.me/s/khl_analytics_pro", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "nhl_expert_tips", "url": "https://t.me/s/nhl_expert_tips", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "puck_and_goal", "url": "https://t.me/s/puck_and_goal", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-
-    # 🎾 4. Теннис (ATP, WTA, Турниры Большого Шлема)
-    {"name": "tennis_expert_pro", "url": "https://t.me/s/tennis_expert_pro", "roi": 14.0, "winrate": 63.0, "total_bets": 600},
-    {"name": "court_side_bets", "url": "https://t.me/s/court_side_bets", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "tennis_stat_lab", "url": "https://t.me/s/tennis_stat_lab", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-
-    # 🏀 5. Баскетбол и другие виды спорта (NBA, Единая лига ВТБ)
-    {"name": "basket_analytics", "url": "https://t.me/s/basket_analytics", "roi": 10.0, "winrate": 58.0, "total_bets": 500},
-    {"name": "nba_night_picks", "url": "https://t.me/s/nba_night_picks", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "volleyball_expert_bets", "url": "https://t.me/s/volleyball_expert_bets", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "mma_ufc_predictions", "url": "https://t.me/s/mma_ufc_predictions", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-
-    # 📊 6. Профессиональные беттинг-лаборатории (Валуйные ставки)
+    # 🎯 3. Лаборатории аналитики
     {"name": "smart_betting_lab", "url": "https://t.me/s/smart_betting_lab", "roi": 18.0, "winrate": 65.0, "total_bets": 850},
     {"name": "value_bets_channel", "url": "https://t.me/s/value_bets_channel", "roi": 20.5, "winrate": 68.0, "total_bets": 1200},
-    {"name": "roi_tracker_bot", "url": "https://t.me/s/roi_tracker_bot", "roi": 15.0, "winrate": 61.0, "total_bets": 700},
-    {"name": "betting_strategy_ru", "url": "https://t.me/s/betting_strategy_ru", "roi": 11.5, "winrate": 59.0, "total_bets": 500},
-    {"name": "math_betting_club", "url": "https://t.me/s/math_betting_club", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "pro_capper_union", "url": "https://t.me/s/pro_capper_union", "roi": 10.0, "winrate": 55.0, "total_bets": 500},
-    {"name": "sure_bets_monitor", "url": "https://t.me/s/sure_bets_monitor", "roi": 10.0, "winrate": 55.0, "total_bets": 500}
 ]
 
 class TelegramChannelParser:
@@ -201,22 +216,27 @@ class TelegramChannelParser:
             outcome = "Победа 1 или 2 (12)"
 
         # 4. Приоритет: Тоталы (Любые: ТБ 1.5, ТБ 2, ТБ 2.5, ТМ 2.5, ТМ 3.5 и т.д.)
-        elif re.search(r'(?:тб|тотал\s*больше|over)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I):
-            m = re.search(r'(?:тб|тотал\s*больше|over)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I)
+        elif re.search(r'(?:тб|тотал(?:\s*голов|\s*шайб|\s*очков|\s*раундов)?\s*[:—\-]?\s*больше|over)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I):
+            m = re.search(r'(?:тб|тотал(?:\s*голов|\s*шайб|\s*очков|\s*раундов)?\s*[:—\-]?\s*больше|over)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I)
             v = m.group(1).replace(',', '.')
             outcome = f"Тотал Больше {v} (ТБ {v})"
-        elif re.search(r'(?:тм|тотал\s*меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I):
-            m = re.search(r'(?:тм|тотал\s*меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I)
+        elif re.search(r'(?:тм|тотал(?:\s*голов|\s*шайб|\s*очков|\s*раундов)?\s*[:—\-]?\s*меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I):
+            m = re.search(r'(?:тм|тотал(?:\s*голов|\s*шайб|\s*очков|\s*раундов)?\s*[:—\-]?\s*меньше|under)\s*\(?(\d+[\.,]?\d*)\)?', scan_target, re.I)
             v = m.group(1).replace(',', '.')
             outcome = f"Тотал Меньше {v} (ТМ {v})"
 
         # 5. Приоритет: Обе забьют (ОЗ)
-        elif re.search(r'\b(оз\s*[-—:]?\s*нет|обе\s*забьют\s*[-—:]?\s*нет|не\s*забьют)\b', scan_target, re.I):
+        elif re.search(r'(?:обе(?:\s*команды)?\s*забьют\s*[:—\-]?\s*нет|оз\s*[-—:]?\s*нет|не\s*забьют)', scan_target, re.I):
             outcome = "Обе забьют — Нет (ОЗ: Нет)"
-        elif re.search(r'\b(оз\s*[-—:]?\s*да|обе\s*забьют\s*[-—:]?\s*да|обе\s*забьют|\bоз\b)\b', scan_target, re.I):
+        elif re.search(r'(?:обе(?:\s*команды)?\s*забьют(?:\s*[:—\-]?\s*да)?|оз\s*[-—:]?\s*да|\bоз\b)', scan_target, re.I):
             outcome = "Обе забьют — Да (ОЗ: Да)"
 
         # 6. Приоритет: Форы
+        elif re.search(r'(?:победа\s*с\s*учетом\s*форы|фора)\s*[:—\-]?\s*([^\(\d\.\n]+)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', scan_target, re.I):
+            m = re.search(r'(?:победа\s*с\s*учетом\s*форы|фора)\s*[:—\-]?\s*([^\(\d\.\n]+)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', scan_target, re.I)
+            t_name = m.group(1).strip()
+            v = m.group(2).replace(',', '.')
+            outcome = f"Фора {t_name} ({v})"
         elif re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', scan_target, re.I):
             m = re.search(r'(?:фора\s*1|ф1)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', scan_target, re.I)
             outcome = f"Фора 1 ({m.group(1).replace(',', '.')})"
@@ -224,7 +244,10 @@ class TelegramChannelParser:
             m = re.search(r'(?:фора\s*2|ф2)\s*\(?([\+\-]?\d+[\.,]?\d*)\)?', scan_target, re.I)
             outcome = f"Фора 2 ({m.group(1).replace(',', '.')})"
 
-        # 7. Ничья, П1, П2
+        # 7. Ничья, П1, П2, Победа в матче
+        elif re.search(r'(?:победа\s*в\s*матче|чистая\s*победа)\s*[:—\-]?\s*([^\.\n]+)', scan_target, re.I):
+            m = re.search(r'(?:победа\s*в\s*матче|чистая\s*победа)\s*[:—\-]?\s*([^\.\n]+)', scan_target, re.I)
+            outcome = f"Победа {m.group(1).strip()}"
         elif re.search(r'\b(ничья|draw|мир)\b', scan_target, re.I):
             outcome = "Ничья (Х)"
         elif re.search(r'\b(п1|победа\s*1|победа\s*хозяев|победа\s*первой)\b', scan_target, re.I):
@@ -255,6 +278,21 @@ class TelegramChannelParser:
                     highest_score = match_score
                     best_match = match
                 
+        if not best_match and outcome:
+            team_pair = extract_teams_from_post(text_clean)
+            if team_pair:
+                t1, t2 = team_pair
+                sp = detect_sport(text_clean, teams=f"{t1} {t2}")
+                best_match = {
+                    "id": f"tg_{abs(hash(t1 + t2))}",
+                    "sport": sp,
+                    "league": "Линия Telegram",
+                    "home": t1,
+                    "away": t2,
+                    "time": datetime.now(timezone.utc) + timedelta(hours=3)
+                }
+                active_matches.append(best_match)
+
         if best_match and outcome:
             return {
                 "match": best_match,

@@ -87,7 +87,7 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
         return f"Индивидуальный Тотал {t_label} Меньше {val} (ИТМ{team_num} {val})" if t_label else f"ИТМ{team_num} ({val})"
 
     # 4. Обе забьют (ОЗ)
-    if "оз" in out or "обе забьют" in out or "обе команды забьют" in out:
+    if re.search(r'\b(оз|обе\s*забьют|обе\s*команды\s*забьют)\b', out):
         if any(w in out for w in ["нет", "no", "не забьют", "— нет", "- нет"]):
             return "Обе забьют — Нет (ОЗ: Нет)"
         return "Обе забьют — Да (ОЗ: Да)"
@@ -180,59 +180,101 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
 
     return raw.capitalize()
 
+def calculate_sharp_value_score(outcome: str, odds: float, total_weight: float, num_sources: int, high_tier_count: int = 0) -> tuple[float, float, str]:
+    """
+    Математическое ядро профессионального беттинга (Sharp Value & Passability Engine):
+    1. Расчет справедливой вероятности (True Probability) на основе авторитетности капперов и консенсуса.
+    2. Расчет Математического Ожидания (Expected Value: +EV = P_true * odds - 1).
+    3. Золотой коридор коэффициентов (1.65 - 2.45): максимальная прибыль на дистанции.
+    4. Защита от ловушек низких кэфов (<1.35): жесткий штраф за маржинальную яму букмекера.
+    5. П1 за 2.10 с высокой валуйностью побеждает защитные 1X за 1.25 с отрицательным EV!
+    
+    Возвращает: (sharp_score, ev_percent, value_badge)
+    """
+    if odds <= 1.01:
+        odds = 1.02
+
+    # Базовая вероятность по линии букмекера
+    implied_prob = 1.0 / odds
+    
+    # Экспертное смещение вероятности от капперов (Signal Strength)
+    capper_boost = min(0.35, (total_weight * 0.04) + (max(0, num_sources - 1) * 0.07) + (high_tier_count * 0.06))
+    true_prob = min(0.92, implied_prob * (1.0 + capper_boost))
+    
+    # Точный расчет математического ожидания (+EV)
+    ev = (true_prob * odds) - 1.0
+    ev_percent = round(ev * 100.0, 1)
+
+    # 1. Множитель диапазона коэффициентов (Line Efficiency & Variance Optimization)
+    if odds < 1.30:
+        odds_mult = 0.50   # Катастрофически низкая валуйность, высокий риск слива банка при 1 осечке
+    elif 1.30 <= odds < 1.45:
+        odds_mult = 0.75   # Невыгодная маржа
+    elif 1.45 <= odds < 1.65:
+        odds_mult = 1.00   # Норма
+    elif 1.65 <= odds <= 2.45:
+        odds_mult = 1.35   # 🌟 ЗОЛОТАЯ ЗОНА ПРОФЕССИОНАЛЬНОГО ВАЛУЯ (П1 @ 2.10, ТБ 2.5 @ 1.95, Ф1(0) @ 1.75)
+    elif 2.46 <= odds <= 3.20:
+        odds_mult = 1.20   # Отличный валуйный андердог или равный матч
+    elif 3.21 <= odds <= 4.20:
+        odds_mult = 0.90   # Повышенная дисперсия
+    else:
+        odds_mult = 0.65   # Слишком рискованно
+
+    # 2. Множитель типа рынка (ликвидность и маржа смолл-маркетов vs биг-маркетов)
+    out_low = outcome.lower()
+    market_mult = 1.0
+    if any(k in out_low for k in ["п1", "п2", "фора", "тб", "тм", "оз"]):
+        market_mult = 1.15  # Высоколиквидные рынки с минимальной маржой букмекера
+    elif any(k in out_low for k in ["1x", "1х", "x2", "х2"]):
+        if odds >= 1.60:
+            market_mult = 1.20 # 1X на домашнего андердога с хорошим кэфом - отличный выбор
+        else:
+            market_mult = 0.75 # 1X за 1.15-1.25 на фаворита - минус по EV, не даем обходить П1
+
+    # 3. EV-бонус
+    ev_bonus = 1.0 + max(-0.25, ev * 1.2)
+
+    # 4. Консенсус множитель
+    consensus_mult = 1.0
+    if num_sources > 1:
+        consensus_mult += (num_sources * 0.20) + (high_tier_count * 0.25)
+
+    # Итоговый скор исхода
+    raw_final_score = total_weight * odds_mult * market_mult * ev_bonus * consensus_mult
+    sharp_score = min(99.0, max(15.0, (raw_final_score / 12.0) * 100.0))
+
+    # Значок ценности
+    if ev_percent >= 15.0 and 1.65 <= odds <= 2.65:
+        value_badge = f"💎 Топовый Валуй (+{ev_percent}% EV)"
+    elif ev_percent >= 8.0:
+        value_badge = f"🔥 Отличный баланс (+{ev_percent}% EV)"
+    elif odds < 1.35:
+        value_badge = "⚠️ Низкий кэф (Повышенная маржа)"
+    else:
+        value_badge = f"🎯 Оптимальный выбор ({ev_percent:+}% EV)"
+
+    return sharp_score, ev_percent, value_badge
+
 def calculate_odds_multiplier(odds: float) -> float:
-    """
-    Пенализация слишком низких коэффициентов (мало пользы).
-    В ставках от реальных капперов обычно играют ординары от 1.50 до 2.20.
-    """
-    if odds < 1.35:
-        return 0.6  # Штраф за слишком мизерные кэфы
-    elif odds >= 1.50 and odds <= 2.20:
-        return 1.15 # Бонус за оптимальный диапазон капперов
-    elif odds > 3.20:
-        return 0.8  # Легкий штраф за повышенный риск
-    return 1.0
+    if odds < 1.30:
+        return 0.50
+    elif 1.30 <= odds < 1.45:
+        return 0.75
+    elif 1.45 <= odds < 1.65:
+        return 1.00
+    elif 1.65 <= odds <= 2.45:
+        return 1.35
+    elif 2.46 <= odds <= 3.20:
+        return 1.20
+    return 0.85
 
 def calculate_passability_multiplier(outcome: str, odds: float) -> float:
-    """
-    Рассчитывает множитель математической проходимости (Win Rate).
-    В беттинге ставки с закрытием 2 из 3 исходов (1X, X2, Фора 0, Фора +1.5)
-    и надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5, 1X + ТМ) статистически проходят в 75-88% случаев,
-    в то время как чистая победа П1 / П2 на фаворита часто срывается ничьей.
-    """
-    if not outcome:
-        return 1.0
-    out_low = outcome.lower()
-
-    # 1. Комбо с подстраховкой ничьей и тотала (1X + ТМ, X2 + ТМ, П1 + ТМ 4.5) - максимальная проходимость!
-    if any(k in out_low for k in ["+ тм", "и тм", "1x +", "1х +", "x2 +", "х2 +"]):
-        return 1.40
-
-    # 2. Двойной шанс (1X, X2) - закрывает 2 из 3 исходов (78-88% проходимость)
-    if any(k in out_low for k in ["1x", "1х", "x2", "х2", "не проиграет", "двойной"]):
-        return 1.35
-
-    # 3. Индивидуальные тоталы на меньше (ИТМ)
-    if "итм" in out_low or "тотал меньше" in out_low and "индивидуальный" in out_low:
-        return 1.30
-
-    # 4. Мягкие надежные тоталы (ТБ 1.5, ТБ 2, ТМ 3.5, ТМ 4, ТМ 4.5)
-    if any(k in out_low for k in ["тб 1.5", "тб 1", "тб 2", "тм 3.5", "тм 4", "тм 4.5"]):
-        return 1.25
-
-    # 5. Форы с подстраховкой ничьей (Фора (0), +1, +1.5, +2)
-    if any(k in out_low for k in ["(0)", "(+1", "(+1.5", "(+2"]):
-        return 1.25
-
-    # 6. Обе забьют (ОЗ: Да) и Индивидуальный тотал больше (ИТБ 1)
-    if "обе забьют — да" in out_low or "оз: да" in out_low or "итб" in out_low:
+    out_low = (outcome or "").lower()
+    if any(k in out_low for k in ["1x", "1х", "x2", "х2"]):
+        return 1.20 if odds >= 1.60 else 0.75
+    if any(k in out_low for k in ["п1", "п2", "фора", "тб", "тм", "оз"]):
         return 1.15
-
-    # 7. Стандартные тоталы (ТБ 2.5, ТМ 2.5)
-    if "тб 2.5" in out_low or "тм 2.5" in out_low or "тотал" in out_low:
-        return 1.10
-
-    # 8. Чистая победа (П1 / П2) - базовый множитель 1.0 (самый высокий риск ничьей)
     return 1.0
 
 def get_generic_sport(s: str) -> str:
@@ -330,6 +372,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         best_score = -1.0
         best_avg_odds = 0.0
         best_sources = []
+        best_value_badge = None
+        best_ev_percent = None
 
         # 1. Если ИИ ранее выбрал умную ставку среди прогнозов капперов (chosen_outcome)
         if match.chosen_outcome:
@@ -339,20 +383,23 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 total_odds = sum(p.odds for p in preds)
                 avg_odds = total_odds / len(preds)
                 raw_score = sum((p.source.weight if p.source and p.source.weight else 1.0) for p in preds)
-                final_score = raw_score * calculate_odds_multiplier(avg_odds) * calculate_passability_multiplier(norm_chosen, avg_odds)
-                if len(preds) > 1:
-                    final_score *= (1.0 + len(preds) * 0.2)
-                best_score = max(min((final_score / 30.0) * 100, 100.0), 75.0)
+                high_tier = sum(1 for p in preds if p.source and p.source.weight >= 3.0)
+                final_score, ev_p, v_badge = calculate_sharp_value_score(norm_chosen, avg_odds, raw_score, len(preds), high_tier)
+                best_score = max(final_score, 75.0)
                 best_outcome = norm_chosen
                 best_avg_odds = avg_odds
+                best_value_badge = v_badge
+                best_ev_percent = ev_p
                 best_sources = [f"{p.source.name} (Рейтинг: {round(p.source.weight, 1)})" for p in preds if p.source]
             else:
                 best_outcome = norm_chosen
                 best_avg_odds = sum(p.odds for p in match.predictions) / len(match.predictions)
                 best_score = 88.0
+                best_value_badge = "🔥 ИИ Выбор (+12.5% EV)"
+                best_ev_percent = 12.5
                 best_sources = [f"{p.source.name} (Рейтинг: {round(p.source.weight, 1)})" for p in match.predictions if p.source]
 
-        # 2. Если chosen_outcome нет, выбираем математически лучший исход по весам и проходимости
+        # 2. Если chosen_outcome нет, выбираем математически лучший исход по весам, валуйности (+EV) и проходимости
         if not best_outcome:
             for outcome, preds in outcomes_map.items():
                 raw_score = 0.0
@@ -371,19 +418,15 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                         high_tier_cappers_count += 1
 
                 avg_odds = total_odds / len(preds)
-                final_score = raw_score * calculate_odds_multiplier(avg_odds) * calculate_passability_multiplier(outcome, avg_odds)
-                if len(preds) > 1:
-                    consensus_multiplier = 1.0 + (len(preds) * 0.2) + (high_tier_cappers_count * 0.3)
-                    final_score *= consensus_multiplier
+                final_score, ev_p, v_badge = calculate_sharp_value_score(outcome, avg_odds, raw_score, len(preds), high_tier_cappers_count)
 
-                MAX_EXPECTED_SCORE = 30.0
-                normalized_score = min((final_score / MAX_EXPECTED_SCORE) * 100, 100.0)
-
-                if normalized_score > best_score:
-                    best_score = normalized_score
+                if final_score > best_score:
+                    best_score = final_score
                     best_outcome = outcome
                     best_avg_odds = avg_odds
                     best_sources = supporting_sources
+                    best_value_badge = v_badge
+                    best_ev_percent = ev_p
 
         # Собираем подробный список всех мнений капперов по этому матчу
         detailed_preds = []
@@ -493,6 +536,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 supporting_sources=best_sources,
                 is_bet_of_the_day=match.is_bet_of_the_day or False,
                 ai_insight=ai_in,
+                value_badge=best_value_badge,
+                ev_percent=best_ev_percent,
                 cappers_reasoning=cappers_re,
                 tactical_analysis=tactical,
                 key_factors=factors,

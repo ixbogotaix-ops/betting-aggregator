@@ -98,6 +98,8 @@ class TopBetResponse(BaseModel):
     supporting_sources: List[str]
     is_bet_of_the_day: bool = False
     ai_insight: Optional[str] = None
+    value_badge: Optional[str] = None
+    ev_percent: Optional[float] = None
     cappers_reasoning: Optional[str] = None
     tactical_analysis: Optional[str] = None
     key_factors: List[str] = []

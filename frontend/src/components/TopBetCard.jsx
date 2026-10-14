@@ -48,7 +48,7 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   }
 
   // 3. Обе забьют (ОЗ)
-  if (low.includes('оз') || low.includes('обе забьют')) {
+  if (/\b(оз|обе\s*забьют|обе\s*команды\s*забьют)\b/i.test(low)) {
     if (low.includes('нет') || low.includes('no') || low.includes('не забьют') || low.includes('— нет') || low.includes('- нет')) {
       return 'Обе забьют — Нет (ОЗ: Нет)';
     }
@@ -434,6 +434,13 @@ const TopBetCard = ({ bet }) => {
             <div className="font-black text-white text-base leading-snug">
               {formatOutcome(bet.recommended_outcome, homeTeam, awayTeam)}
             </div>
+            {bet.value_badge && (
+              <div className="mt-2 flex items-center">
+                <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm">
+                  {bet.value_badge}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* ИСТОЧНИКИ */}
