@@ -8,7 +8,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [showConfigHelp, setShowConfigHelp] = useState(false);
 
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '1071085842509-due59v08vg3t9uvk9teo225n8bqcmmkm.apps.googleusercontent.com';
 
   useEffect(() => {
     if (!isOpen) {

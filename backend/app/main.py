@@ -22,6 +22,8 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:5173",
         "http://45.84.222.76",
+        "http://dthenbk.duckdns.org",
+        "https://dthenbk.duckdns.org",
     ],
     allow_credentials=True,
     allow_methods=["*"],
