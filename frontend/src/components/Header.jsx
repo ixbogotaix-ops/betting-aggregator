@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Activity, Target, Clock, LogIn } from 'lucide-react';
+import { Trophy, Activity, Target, Clock, LogIn, Radio } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AuthModal from './AuthModal';
 import UserMenu from './UserMenu';
@@ -38,7 +38,7 @@ const MoscowClock = () => {
   );
 };
 
-const Header = ({ currentSport, onSportChange }) => {
+const Header = ({ currentSport, onSportChange, onOpenSources }) => {
   const { isLoggedIn } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -77,8 +77,19 @@ const Header = ({ currentSport, onSportChange }) => {
             })}
           </nav>
 
-          {/* Right Area: Clock & User/Auth */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Right Area: Sources Button, Clock & User/Auth */}
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            {/* Кнопка Мониторинга Источников */}
+            <button
+              onClick={onOpenSources}
+              title="Мониторинг источников и парсеров"
+              className="flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/70 text-gray-300 hover:text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 group"
+            >
+              <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span className="hidden sm:inline">Источники</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
+            </button>
+
             <MoscowClock />
 
             {isLoggedIn ? (

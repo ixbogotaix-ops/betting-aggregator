@@ -9,7 +9,7 @@ import DailyParlaysWidget from './components/DailyParlaysWidget';
 import { 
   Flame, CalendarDays, AlertTriangle, Bot, CheckCircle2, 
   Trophy, Clock, Zap, ArrowRight, Sparkles, Filter, 
-  ArrowUpDown, Users, TrendingUp 
+  ArrowUpDown, Users, TrendingUp, Radio 
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,6 +18,7 @@ function App() {
   const [currentSport, setCurrentSport] = useState('All');
   const [activeTab, setActiveTab] = useState('botd'); // 'botd', 'cappers', 'parlays', 'matches', 'archive', 'stats'
   const [cappersSort, setCappersSort] = useState('confidence'); // 'confidence', 'odds', 'cappers'
+  const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   
   // Устанавливаем сегодняшнюю дату по умолчанию (формат YYYY-MM-DD)
   const today = new Date().toISOString().split('T')[0];
@@ -123,13 +124,14 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
-      <Header currentSport={currentSport} onSportChange={setCurrentSport} />
+      <Header 
+        currentSport={currentSport} 
+        onSportChange={setCurrentSport} 
+        onOpenSources={() => setIsSourcesOpen(true)}
+      />
 
-      <div className="flex-grow max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-8">
-        {/* Боковой дебаг-сайдбар */}
-        <SourcesSidebar />
-
-        <main className="flex-1 w-full min-w-0">
+      <div className="flex-grow max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="w-full min-w-0">
           {error && (
             <div className="mb-8 p-4 bg-danger/10 border border-danger/30 rounded-lg flex items-center gap-3 text-danger">
               <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -499,6 +501,25 @@ function App() {
 
         </main>
       </div>
+
+      {/* Выдвижная панель мониторинга источников (Drawer) */}
+      <SourcesSidebar 
+        isOpen={isSourcesOpen} 
+        onClose={() => setIsSourcesOpen(false)} 
+      />
+
+      {/* Плавающая кнопка для быстрого открытия мониторинга источников */}
+      <button
+        onClick={() => setIsSourcesOpen(true)}
+        title="Мониторинг источников и капперов"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-gray-900/90 hover:bg-gray-800 border border-gray-700/80 text-gray-200 shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 group ring-1 ring-blue-500/30"
+      >
+        <div className="relative flex items-center justify-center">
+          <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-gray-900"></span>
+        </div>
+        <span className="text-xs font-black tracking-wide hidden sm:inline">Источники</span>
+      </button>
 
       <footer className="border-t border-gray-800 mt-auto bg-dark">
         <div className="max-w-7xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
