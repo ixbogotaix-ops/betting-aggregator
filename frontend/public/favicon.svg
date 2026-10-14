@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+
+    <!-- Neon Glow Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+
+    <!-- Gold Trophy Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="35%" stop-color="#f59e0b" />
+      <stop offset="70%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+
+    <!-- Cyan Spark Gradient -->
+    <linearGradient id="cyanSpark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9" />
+      <stop offset="100%" stop-color="#0ea5e9" />
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Base Squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="128" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="20" />
+
+  <!-- Ambient Light Glow behind Trophy -->
+  <circle cx="256" cy="240" r="140" fill="#6366f1" opacity="0.25" filter="url(#glow)" />
+
+  <!-- Trophy Graphic -->
+  <g filter="url(#glow)">
+    <!-- Trophy Cup Base & Handles -->
+    <!-- Left Handle -->
+    <path d="M140 180 C110 180 100 230 130 260 C155 285 180 280 180 280" fill="none" stroke="url(#goldGrad)" stroke-width="24" stroke-linecap="round" />
+    <!-- Right Handle -->
+    <path d="M372 180 C402 180 412 230 382 260 C357 285 332 280 332 280" fill="none" stroke="url(#goldGrad)" stroke-width="24" stroke-linecap="round" />
+
+    <!-- Main Cup Body -->
+    <path d="M170 150 L342 150 C342 245 295 300 256 315 C217 300 170 245 170 150 Z" fill="url(#goldGrad)" />
+    
+    <!-- Cup Rim -->
+    <rect x="156" y="132" width="200" height="28" rx="14" fill="#fef08a" />
+
+    <!-- Stem -->
+    <path d="M236 310 L276 310 L284 375 L228 375 Z" fill="url(#goldGrad)" />
+
+    <!-- Base Pedestal -->
+    <rect x="180" y="375" width="152" height="32" rx="12" fill="url(#goldGrad)" />
+    <rect x="160" y="407" width="192" height="24" rx="10" fill="#b45309" />
+  </g>
+
+  <!-- AI Pulse Star / Neural Spark -->
+  <g transform="translate(320, 100)">
+    <circle cx="20" cy="20" r="18" fill="#38bdf8" opacity="0.4" filter="url(#glow)" />
+    <path d="M20 0 L25 15 L40 20 L25 25 L20 40 L15 25 L0 20 L15 15 Z" fill="url(#cyanSpark)" />
+  </g>
+</svg>
