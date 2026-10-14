@@ -133,16 +133,36 @@ const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   return clean;
 };
 
-const getRussianSport = (sport) => {
-  const s = (sport || '').toLowerCase();
-  if (s.includes('soccer') || s.includes('liga') || s.includes('ligue') || s.includes('epl') || s.includes('football') || s.includes('premier') || s.includes('championship') || s.includes('serie') || s.includes('bundesliga') || s.includes('uefa')) return 'ФУТБОЛ';
-  if (s.includes('nba') || s.includes('basketball') || s.includes('euroleague')) return 'БАСКЕТБОЛ';
-  if (s.includes('nhl') || s.includes('hockey') || s.includes('khl') || s.includes('allsvenskan')) return 'ХОККЕЙ';
-  if (s.includes('tennis') || s.includes('atp') || s.includes('wta')) return 'ТЕННИС';
-  if (s.includes('mma') || s.includes('ufc') || s.includes('martial')) return 'ММА';
-  if (s.includes('nfl') || s.includes('american')) return 'АМЕР. ФУТБОЛ';
-  return 'СПОРТ';
+export const getSportDisplay = (sport, league = '') => {
+  const s = `${sport || ''} ${league || ''}`.toLowerCase().trim();
+  if (s.includes('mma') || s.includes('ufc') || s.includes('bellator') || s.includes('boxing') || s.includes('martial')) {
+    return { name: 'MMA / Бои', icon: '🥊', color: 'from-red-500/20 to-rose-500/10 text-rose-300 border-rose-500/30' };
+  }
+  if (s.includes('tennis') || s.includes('atp') || s.includes('wta') || s.includes('itf')) {
+    return { name: 'Теннис', icon: '🎾', color: 'from-lime-500/20 to-green-500/10 text-lime-300 border-lime-500/30' };
+  }
+  if (s.includes('basketball') || s.includes('nba') || s.includes('euroleague') || s.includes('vtb') || s.includes('acb')) {
+    return { name: 'Баскетбол', icon: '🏀', color: 'from-orange-500/20 to-amber-500/10 text-orange-300 border-orange-500/30' };
+  }
+  if (!s.includes('veikkausliiga') && (s.includes('hockey') || s.includes('nhl') || s.includes('khl') || s.includes('ahl') || s.includes('shl') || s.includes('liiga') || s.includes('allsvenskan') || s.includes('mestis'))) {
+    return { name: 'Хоккей', icon: '🏒', color: 'from-cyan-500/20 to-blue-500/10 text-cyan-300 border-cyan-500/30' };
+  }
+  if (s.includes('nfl') || s.includes('ncaaf') || s.includes('american football') || s.includes('afl')) {
+    return { name: 'Амер. футбол', icon: '🏈', color: 'from-amber-500/20 to-yellow-500/10 text-amber-300 border-amber-500/30' };
+  }
+  if (s.includes('esport') || s.includes('dota') || s.includes('cs:go') || s.includes('cs2') || s.includes('counter-strike') || s.includes('league of legends') || s.includes('valorant')) {
+    return { name: 'Киберспорт', icon: '🎮', color: 'from-purple-500/20 to-pink-500/10 text-purple-300 border-purple-500/30' };
+  }
+  if (s.includes('baseball') || s.includes('mlb') || s.includes('kbo') || s.includes('npb')) {
+    return { name: 'Бейсбол', icon: '⚾', color: 'from-blue-500/20 to-indigo-500/10 text-blue-300 border-blue-500/30' };
+  }
+  if (s.includes('cricket') || s.includes('twenty20') || s.includes('t20')) {
+    return { name: 'Крикет', icon: '🏏', color: 'from-emerald-500/20 to-green-500/10 text-emerald-300 border-emerald-500/30' };
+  }
+  return { name: 'Футбол', icon: '⚽', color: 'from-blue-500/20 to-indigo-500/10 text-blue-300 border-blue-500/30' };
 };
+
+export const getRussianSport = (sport) => getSportDisplay(sport).name.toUpperCase();
 
 const formatCardMoscowTime = (dateStr) => {
   if (!dateStr) return { dateStr: '', timeStr: '' };
@@ -213,6 +233,7 @@ const TopBetCard = ({ bet }) => {
   const getLogoUrl = (teamName) => 
     `https://ui-avatars.com/api/?name=${encodeURIComponent(teamName || 'Team')}&background=1e293b&color=38bdf8&size=64&bold=true&rounded=true`;
 
+  const sportDisplay = getSportDisplay(bet.sport_type, bet.league);
   const totalCappersCount = bet.all_predictions?.length || bet.supporting_sources?.length || 0;
   const mskTime = formatCardMoscowTime(bet.match_date);
 
@@ -232,24 +253,15 @@ const TopBetCard = ({ bet }) => {
         <div className={`absolute top-0 right-0 w-32 h-32 opacity-10 rounded-bl-full pointer-events-none blur-xl ${colorClass}`}></div>
 
         <div>
-          {/* ВЕРХНЯЯ ШАПКА: Турнир/Страна СЛЕВА, Время СПРАВА */}
+          {/* ВЕРХНЯЯ ШАПКА: Вид спорта СЛЕВА (Футбол, Хоккей и т.д.), Время СПРАВА */}
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-1.5 min-w-0">
-              {bet.country_flag_url ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-800/90 text-gray-200 rounded-full text-xs font-bold border border-gray-700/80 shadow-sm shrink-0">
-                  <img 
-                    src={bet.country_flag_url} 
-                    alt={bet.country_name || "Country"} 
-                    className="w-4 h-3 object-cover rounded-sm shadow-sm inline-block" 
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                  <span className="truncate max-w-[120px]">{bet.country_name || bet.sport_type}</span>
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r ${sportDisplay.color} rounded-full text-xs font-black border shadow-sm shrink-0`}>
+                <span className="text-sm">{sportDisplay.icon}</span>
+                <span className="truncate max-w-[140px] uppercase text-[11px] tracking-wider font-extrabold">
+                  {sportDisplay.name}
                 </span>
-              ) : (
-                <span className="text-xs font-bold px-2.5 py-1 bg-gray-800/90 text-gray-300 rounded-full border border-gray-700/80 shrink-0">
-                  {bet.country_flag_emoji ? `${bet.country_flag_emoji} ` : ''}{bet.sport_type}
-                </span>
-              )}
+              </span>
             </div>
 
             {/* Аккуратная плашка времени по Москве */}
@@ -262,18 +274,26 @@ const TopBetCard = ({ bet }) => {
             )}
           </div>
 
-          {/* ПОДШАПКА: Статус "Ставка Дня" + Лига */}
+          {/* ПОДШАПКА: Статус "Ставка Дня" + Лига с флагом страны */}
           <div className="flex items-center gap-2 flex-wrap mb-4">
             {bet.is_bet_of_the_day && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-400/30 shadow-sm animate-pulse">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-400/40 shadow-sm animate-pulse">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span>СТАВКА ДНЯ</span>
                 <span className="text-amber-500/60">•</span>
-                <span className="text-amber-200 font-semibold">{getRussianSport(bet.sport_type)}</span>
+                <span className="text-amber-200 font-semibold">{sportDisplay.name.toUpperCase()}</span>
               </span>
             )}
-            <span className="text-[11px] font-semibold text-gray-400 px-2.5 py-0.5 bg-gray-800/60 rounded-md border border-gray-800 truncate max-w-[170px]">
-              {bet.league}
+            <span className="text-[11px] font-semibold text-gray-400 px-2.5 py-0.5 bg-gray-800/60 rounded-md border border-gray-800 truncate max-w-[190px] inline-flex items-center gap-1.5">
+              {bet.country_flag_url && (
+                <img 
+                  src={bet.country_flag_url} 
+                  alt="" 
+                  className="w-3.5 h-2.5 object-cover rounded-[2px] opacity-75 shrink-0" 
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
+              <span className="truncate">{bet.league || bet.country_name || "Лига"}</span>
             </span>
           </div>
 

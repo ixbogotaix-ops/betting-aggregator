@@ -120,61 +120,45 @@ async def get_today_predictions(
         models.Match.match_date <= end_of_day
     )
 
-    if sport_type:
-        stmt = stmt.where(models.Match.sport_type == sport_type)
-
     result = await db.execute(stmt)
     matches = result.scalars().all()
     
+    if sport_type and sport_type != 'All':
+        from .consensus import get_generic_sport
+        matches = [m for m in matches if get_generic_sport(m.sport_type) == sport_type or (m.sport_type and m.sport_type.lower() == sport_type.lower())]
+    
     return matches
 
-from .consensus import calculate_daily_top_bets
+from .consensus import calculate_daily_top_bets, get_generic_sport
 from .schemas import TopBetResponse
-
-def get_generic_sport(sport_name: str) -> str:
-    s = sport_name.lower()
-    if any(x in s for x in ["soccer", "série", "serie", "liga", "epl", "football", "premier", "championship", "uefa", "fifa", "pro league"]):
-        return "Football"
-    if any(x in s for x in ["nba", "basketball"]):
-        return "Basketball"
-    if any(x in s for x in ["nhl", "hockey", "khl", "liiga", "shl"]):
-        return "Ice Hockey"
-    if any(x in s for x in ["ncaaf", "nfl"]):
-        return "American Football"
-    if any(x in s for x in ["tennis", "atp", "wta"]):
-        return "Tennis"
-    if any(x in s for x in ["cricket", "t20"]):
-        return "Cricket"
-    return sport_name
 
 @app.get("/api/predictions/top-daily", response_model=List[TopBetResponse])
 async def get_top_daily_bets(
     sport_type: Optional[str] = Query(None, description="Фильтр по виду спорта"),
     date: Optional[str] = Query(None, description="Дата в формате YYYY-MM-DD"),
     status_filter: Optional[str] = Query(None, description="upcoming / finished"),
+    only_bet_of_the_day: Optional[bool] = Query(False, description="Только 1 ставка дня на спорт"),
     db: AsyncSession = Depends(get_db)
 ):
     top_bets = await calculate_daily_top_bets(db, sport_type, date, status_filter)
 
-    # Оставляем только ОДНУ лучшую ставку на каждый БАЗОВЫЙ вид спорта!
-    filtered_bets = []
-    seen_sports = set()
-    
-    # Сначала ищем матчи, которые ИИ отметил как is_bet_of_the_day
-    for bet in top_bets:
-        generic = get_generic_sport(bet.sport_type)
-        if bet.is_bet_of_the_day and generic not in seen_sports:
-            filtered_bets.append(bet)
-            seen_sports.add(generic)
-            
-    # Если для какого-то спорта ИИ еще не выбрал ставку, берем просто самый уверенный матч
-    for bet in top_bets:
-        generic = get_generic_sport(bet.sport_type)
-        if generic not in seen_sports:
-            filtered_bets.append(bet)
-            seen_sports.add(generic)
-            
-    return filtered_bets
+    if only_bet_of_the_day:
+        filtered_bets = []
+        seen_sports = set()
+        for bet in top_bets:
+            generic = get_generic_sport(bet.sport_type)
+            if bet.is_bet_of_the_day and generic not in seen_sports:
+                filtered_bets.append(bet)
+                seen_sports.add(generic)
+        for bet in top_bets:
+            generic = get_generic_sport(bet.sport_type)
+            if generic not in seen_sports:
+                bet.is_bet_of_the_day = True
+                filtered_bets.append(bet)
+                seen_sports.add(generic)
+        return filtered_bets
+
+    return top_bets
 
 # --- Дополнительные эндпоинты ---
 @app.post("/api/sources/", response_model=schemas.SourceResponse, status_code=201)

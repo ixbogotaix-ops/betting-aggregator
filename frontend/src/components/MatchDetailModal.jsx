@@ -3,6 +3,7 @@ import {
   X, Target, Shield, Sparkles, Brain, TrendingUp, Users, 
   MessageSquare, Flame, BookOpen, Swords, BarChart3, CheckCircle2 
 } from 'lucide-react';
+import { getSportDisplay } from './TopBetCard';
 
 const formatOutcome = (outcome, homeTeam = '', awayTeam = '') => {
   if (!outcome) return '';
@@ -221,31 +222,35 @@ const MatchDetailModal = ({ bet, onClose }) => {
 
         {/* Шапка модалки */}
         <div className="p-6 bg-gradient-to-b from-gray-800/70 via-gray-850 to-gray-900 border-b border-gray-800 shrink-0">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            {bet.country_flag_url ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-800/90 text-gray-200 rounded-full text-xs font-bold border border-gray-700 shadow-sm">
-                <img 
-                  src={bet.country_flag_url} 
-                  alt={bet.country_name || "Country"} 
-                  className="w-4 h-3 object-cover rounded-sm shadow-sm inline-block" 
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-                <span>{bet.country_name || bet.sport_type}</span>
-              </span>
-            ) : (
-              <span className="text-xs font-bold px-3 py-1 bg-blue-500/15 text-blue-400 rounded-full border border-blue-500/30 uppercase tracking-wider">
-                {bet.country_flag_emoji ? `${bet.country_flag_emoji} ` : ''}{bet.sport_type}
-              </span>
-            )}
-            <span className="text-xs font-semibold px-2.5 py-1 bg-gray-800 text-gray-300 rounded-md border border-gray-700">
-              {bet.league}
-            </span>
-            {bet.is_bet_of_the_day && (
-              <span className="text-xs font-black text-yellow-400 bg-yellow-400/15 px-3 py-1 rounded-md border border-yellow-400/30 flex items-center gap-1 animate-pulse">
-                🏆 {getRussianSport(bet.sport_type)} - СТАВКА ДНЯ
-              </span>
-            )}
-          </div>
+          {(() => {
+            const sportDisplay = getSportDisplay(bet.sport_type, bet.league);
+            return (
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r ${sportDisplay.color} rounded-full text-xs font-black border shadow-sm`}>
+                  <span className="text-sm">{sportDisplay.icon}</span>
+                  <span className="uppercase text-[11px] tracking-wider font-extrabold">{sportDisplay.name}</span>
+                </span>
+
+                <span className="text-xs font-semibold px-2.5 py-1 bg-gray-800 text-gray-300 rounded-md border border-gray-700 inline-flex items-center gap-1.5">
+                  {bet.country_flag_url && (
+                    <img 
+                      src={bet.country_flag_url} 
+                      alt="" 
+                      className="w-3.5 h-2.5 object-cover rounded-[2px] opacity-75 shrink-0" 
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
+                  <span>{bet.league || bet.country_name || "Лига"}</span>
+                </span>
+
+                {bet.is_bet_of_the_day && (
+                  <span className="text-xs font-black text-amber-300 bg-amber-500/15 px-3 py-1 rounded-md border border-amber-400/40 flex items-center gap-1 animate-pulse">
+                    🏆 СТАВКА ДНЯ • {sportDisplay.name.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Команды и время матча с эмблемами */}
           <div className="flex items-center justify-between gap-4 mt-3">

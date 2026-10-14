@@ -7,12 +7,13 @@ const api = axios.create({
   timeout: 10000,
 });
 
-export const getTopBets = async (sportType = null, date = null, statusFilter = null) => {
+export const getTopBets = async (sportType = null, date = null, statusFilter = null, onlyBetOfTheDay = false) => {
   try {
     const params = {};
     if (sportType && sportType !== 'All') params.sport_type = sportType;
     if (date) params.date = date;
     if (statusFilter) params.status_filter = statusFilter;
+    if (onlyBetOfTheDay) params.only_bet_of_the_day = true;
     const response = await api.get('/predictions/top-daily', { params });
     return response.data;
   } catch (error) {

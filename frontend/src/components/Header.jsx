@@ -4,7 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import AuthModal from './AuthModal';
 import UserMenu from './UserMenu';
 
-const sports = ['All', 'Football', 'Hockey', 'Basketball', 'Esports'];
+const sports = [
+  { id: 'All', label: 'Все', icon: '🏆' },
+  { id: 'Football', label: 'Футбол', icon: '⚽' },
+  { id: 'Hockey', label: 'Хоккей', icon: '🏒' },
+  { id: 'Basketball', label: 'Баскетбол', icon: '🏀' },
+  { id: 'Esports', label: 'Киберспорт', icon: '🎮' },
+];
 
 const MoscowClock = () => {
   const [time, setTime] = useState(new Date());
@@ -51,20 +57,24 @@ const Header = ({ currentSport, onSportChange }) => {
           </div>
 
           {/* Navigation/Filters */}
-          <nav className="flex space-x-2 overflow-x-auto mx-4 hidden md:flex">
-            {sports.map((sport) => (
-              <button
-                key={sport}
-                onClick={() => onSportChange(sport)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap uppercase tracking-wider
-                  ${currentSport === sport 
-                    ? 'bg-accent text-white shadow-lg shadow-blue-500/25 ring-1 ring-blue-400/50' 
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800 ring-1 ring-transparent hover:ring-gray-700'
-                  }`}
-              >
-                {sport}
-              </button>
-            ))}
+          <nav className="flex items-center space-x-1 sm:space-x-1.5 overflow-x-auto mx-2 sm:mx-4 py-1 scrollbar-none [&::-webkit-scrollbar]:hidden">
+            {sports.map((sport) => {
+              const isActive = currentSport === sport.id;
+              return (
+                <button
+                  key={sport.id}
+                  onClick={() => onSportChange(sport.id)}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap tracking-wide
+                    ${isActive 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-blue-400/50 scale-[1.02]' 
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800/80 ring-1 ring-transparent hover:ring-gray-700/60'
+                    }`}
+                >
+                  <span className="text-sm">{sport.icon}</span>
+                  <span>{sport.label}</span>
+                </button>
+              );
+            })}
           </nav>
 
           {/* Right Area: Clock & User/Auth */}

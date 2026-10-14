@@ -159,6 +159,35 @@ def calculate_odds_multiplier(odds: float) -> float:
         return 0.8  # Легкий штраф за риск
     return 1.0
 
+def get_generic_sport(s: str) -> str:
+    s_low = (s or '').lower().strip()
+    if any(x in s_low for x in ["mma", "ufc", "bellator", "boxing", "martial"]):
+        return "MMA"
+    if any(x in s_low for x in ["tennis", "atp", "wta", "itf"]):
+        return "Tennis"
+    if any(x in s_low for x in ["basketball", "nba", "euroleague", "vtb", "acb", "nbl"]):
+        return "Basketball"
+    if "veikkausliiga" not in s_low and any(x in s_low for x in ["hockey", "nhl", "khl", "ahl", "shl", "liiga", "mestis", "vhl"]):
+        return "Hockey"
+    if any(x in s_low for x in ["nfl", "ncaaf", "american football", "afl"]):
+        return "American Football"
+    if any(x in s_low for x in ["esport", "dota", "cs:go", "cs2", "counter-strike", "league of legends", "valorant"]):
+        return "Esports"
+    if any(x in s_low for x in ["baseball", "mlb", "kbo", "npb"]):
+        return "Baseball"
+    if any(x in s_low for x in ["cricket", "twenty20", "one day international", "t20", "test matches"]):
+        return "Cricket"
+    if any(x in s_low for x in [
+        "football", "soccer", "uefa", "champions league", "europa league", "conference league",
+        "la liga", "epl", "premier", "serie", "série", "bundesliga", "ligue", "eredivisie", "superliga",
+        "ekstraklasa", "eliteserien", "allsvenskan", "championship", "league 1", "league 2", "3. liga",
+        "copa", "sudamericana", "libertadores", "liga mx", "mls", "saudi", "primeira",
+        "primera", "super league", "superleague", "superettan", "veikkausliiga", "j league", "k league",
+        "division", "div", "ireland", "scotland"
+    ]):
+        return "Football"
+    return "Other"
+
 async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None, date_str: str = None, status_filter: str = None) -> List[TopBetResponse]:
     """
     Отбирает матчи на выбранную дату и агрегирует прогнозы реальных капперов.
@@ -203,11 +232,11 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         if status_filter == "upcoming":
             stmt = stmt.where(Match.status == MatchStatus.upcoming)
 
-    if sport_type:
-        stmt = stmt.where(Match.sport_type == sport_type)
-
     result = await session.execute(stmt)
     matches = result.scalars().all()
+
+    if sport_type and sport_type != 'All':
+        matches = [m for m in matches if get_generic_sport(m.sport_type) == sport_type or (m.sport_type and m.sport_type.lower() == sport_type.lower())]
 
     top_bets = []
 
@@ -400,4 +429,22 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
 
     # Сортируем от самых уверенных ставок к менее уверенным
     top_bets.sort(key=lambda x: x.confidence_score, reverse=True)
+
+    # Определяем Ставку Дня: ровно 1 лучшая ставка на каждый базовый вид спорта
+    seen_botd_sports = set()
+    for bet in top_bets:
+        gen = get_generic_sport(bet.sport_type)
+        if bet.is_bet_of_the_day:
+            if gen not in seen_botd_sports:
+                seen_botd_sports.add(gen)
+            else:
+                bet.is_bet_of_the_day = False
+
+    # Для тех видов спорта, где флага еще не было, отмечаем самую уверенную ставку
+    for bet in top_bets:
+        gen = get_generic_sport(bet.sport_type)
+        if gen not in seen_botd_sports:
+            bet.is_bet_of_the_day = True
+            seen_botd_sports.add(gen)
+
     return top_bets
