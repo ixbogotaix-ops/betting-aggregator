@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getTopBets, getTodayMatches, getAiAnalysis, getRecentResults } from './api';
+import { getTopBets, getTodayMatches, getAiAnalysis, getRecentResults, getRobobetPredictions } from './api';
 import Header from './components/Header';
 import TopBetCard from './components/TopBetCard';
+import RobobetCard from './components/RobobetCard';
 import MatchList from './components/MatchList';
 import SourcesSidebar from './components/SourcesSidebar';
 import StatsLeaderboard from './components/StatsLeaderboard';
 import DailyParlaysWidget from './components/DailyParlaysWidget';
+import RobobetView from './components/RobobetView';
+import ArchiveView from './components/ArchiveView';
+import MonthlyPerformanceWidget from './components/MonthlyPerformanceWidget';
 import { 
   Flame, CalendarDays, AlertTriangle, Bot, CheckCircle2, 
   Trophy, Clock, Zap, ArrowRight, Sparkles, Filter, 
-  ArrowUpDown, Users, TrendingUp, Radio, ChevronRight 
+  ArrowUpDown, Users, TrendingUp, Radio, ChevronRight, Search 
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getGenericSport, getLocalDateString, toRussianTeam, toRussianMatchName, toRussianLeague } from './utils/russianNames';
 
 const sportsList = [
   { id: 'All', label: 'Все виды', icon: '🏆' },
@@ -29,62 +34,79 @@ function App() {
   const [currentSport, setCurrentSport] = useState('All');
   const [activeTab, setActiveTab] = useState('botd'); // 'botd', 'cappers', 'parlays', 'matches', 'archive', 'stats'
   const [cappersSort, setCappersSort] = useState('confidence'); // 'confidence', 'odds', 'cappers'
+  const [cappersSearch, setCappersSearch] = useState('');
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   
-  // Устанавливаем сегодняшнюю дату по умолчанию (формат YYYY-MM-DD)
-  const today = new Date().toISOString().split('T')[0];
+  // Устанавливаем сегодняшнюю локальную дату по умолчанию (формат YYYY-MM-DD без сдвига в UTC)
+  const today = getLocalDateString(new Date());
   const [currentDate, setCurrentDate] = useState(today);
 
-  const [topBets, setTopBets] = useState([]);
+  const [allTopBets, setAllTopBets] = useState([]);
   const [matches, setMatches] = useState([]);
-  const [archiveBets, setArchiveBets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingArchive, setLoadingArchive] = useState(false);
   const [error, setError] = useState(null);
   
   const [aiVerdict, setAiVerdict] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [robobetBotd, setRobobetBotd] = useState(null);
 
-  // Загрузка предстоящих матчей
+  // Загрузка главных ставок дня и фоновая подгрузка расписания
   useEffect(() => {
+    let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       setAiVerdict(null);
       try {
-        const [betsData, matchesData] = await Promise.all([
-          getTopBets(currentSport, currentDate, 'upcoming'),
-          getTodayMatches(currentSport, currentDate)
-        ]);
-        setTopBets(betsData);
-        setMatches(matchesData);
+        // 1. Моментальная приоритетная загрузка Ставки Дня и Топ-3 прогнозов (300 мс)
+        const betsData = await getTopBets('All', currentDate, 'all');
+        if (isMounted && Array.isArray(betsData)) {
+          setAllTopBets(betsData);
+        }
       } catch (err) {
-        setError("Не удалось загрузить данные. Убедитесь, что бэкенд запущен на порту 8000.");
+        console.error("Failed to load top bets:", err);
+        if (isMounted && (!allTopBets || allTopBets.length === 0)) {
+          setError("Сервер обновляет аналитику капперов. Пожалуйста, подождите несколько секунд...");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false); // Мгновенный показ карточек пользователю!
+        }
+      }
+
+      // 2. Фоновая неблокирующая подгрузка расписания и робобета
+      try {
+        const [matchesRes, rRes] = await Promise.allSettled([
+          getTodayMatches(currentSport, currentDate),
+          getRobobetPredictions()
+        ]);
+
+        if (isMounted && matchesRes.status === 'fulfilled' && Array.isArray(matchesRes.value)) {
+          setMatches(matchesRes.value);
+        }
+
+        if (isMounted && rRes.status === 'fulfilled' && rRes.value?.bet_of_the_day) {
+          setRobobetBotd(rRes.value.bet_of_the_day);
+        }
+      } catch (err) {
+        console.error("Background data fetch error:", err);
       }
     };
 
     fetchData();
-  }, [currentSport, currentDate]);
+    return () => { isMounted = false; };
+  }, [currentDate]);
 
-  // Загрузка архива при переключении на вкладку 'archive'
+  // При смене спорта обновляем список расписания
   useEffect(() => {
-    if (activeTab === 'archive') {
-      const fetchArchive = async () => {
-        setLoadingArchive(true);
-        try {
-          const data = await getRecentResults(currentSport);
-          setArchiveBets(data);
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setLoadingArchive(false);
-        }
-      };
-      fetchArchive();
-    }
-  }, [activeTab, currentSport]);
+    const updateMatches = async () => {
+      try {
+        const matchesData = await getTodayMatches(currentSport, currentDate);
+        setMatches(matchesData);
+      } catch (e) {}
+    };
+    updateMatches();
+  }, [currentSport, currentDate]);
 
   const handleAiAnalysis = async () => {
     setIsAiLoading(true);
@@ -98,49 +120,55 @@ function App() {
     }
   };
 
-  // Подсчёт количества прогнозов по каждому виду спорта
+  // Подсчёт количества прогнозов по каждому виду спорта (всегда по полной базе allTopBets!)
   const sportCounts = useMemo(() => {
-    const counts = { All: topBets.length };
-    for (const bet of topBets) {
-      const s = (bet.sport_type || '').toLowerCase();
-      let gen = 'Football';
-      if (s.includes('mma') || s.includes('ufc') || s.includes('boxing')) gen = 'MMA';
-      else if (s.includes('tennis') || s.includes('atp') || s.includes('wta')) gen = 'Tennis';
-      else if (s.includes('basketball') || s.includes('nba') || s.includes('euroleague')) gen = 'Basketball';
-      else if (!s.includes('veikkausliiga') && (s.includes('hockey') || s.includes('nhl') || s.includes('khl') || s.includes('allsvenskan') || s.includes('shl') || s.includes('liiga'))) gen = 'Hockey';
-      else if (s.includes('nfl') || s.includes('ncaaf') || s.includes('american football')) gen = 'American Football';
-      else if (s.includes('esport') || s.includes('cs:go') || s.includes('cs2') || s.includes('dota')) gen = 'Esports';
-      
+    const counts = { All: allTopBets.length };
+    for (const bet of allTopBets) {
+      const gen = getGenericSport(bet.sport_type);
       counts[gen] = (counts[gen] || 0) + 1;
     }
     return counts;
+  }, [allTopBets]);
+
+  // Фильтрация прогнозов по выбранному виду спорта (мгновенно, 0 мс задержки)
+  const topBets = useMemo(() => {
+    if (currentSport === 'All') return allTopBets;
+    return allTopBets.filter(b => getGenericSport(b.sport_type) === currentSport);
+  }, [allTopBets, currentSport]);
+
+  // 1. Топ-3 Ставки Дня (Ранг 1 - Ставка Дня, Ранг 2 - Топ-2 Дня, Ранг 3 - Топ-3 Дня)
+  const top3Bets = useMemo(() => {
+    return topBets.slice(0, 3);
   }, [topBets]);
 
-  // 1. Главные Ставки Дня (флаг is_bet_of_the_day)
-  const botdBets = useMemo(() => {
-    const bets = topBets.filter(b => b.is_bet_of_the_day);
-    if (bets.length > 0) return bets;
-    const seen = new Set();
-    const res = [];
-    for (const b of topBets) {
-      const s = (b.sport_type || '').toLowerCase();
-      if (!seen.has(s)) {
-        seen.add(s);
-        res.push({ ...b, is_bet_of_the_day: true });
-      }
-    }
-    return res;
-  }, [topBets]);
+  // Главная Ставка Дня — СТРОГО 1 матч из топ-3 (Ранг 1 с флагом is_bet_of_the_day)
+  const mainBotd = useMemo(() => {
+    return top3Bets.find(b => b.is_bet_of_the_day) || top3Bets[0] || null;
+  }, [top3Bets]);
 
-  // 2. Другие сильные прогнозы и кандидаты дня (из которых выбиралась ставка дня)
+  // 2. Другие сильные прогнозы и кандидаты дня (начиная с 4-го матча)
   const candidateBets = useMemo(() => {
-    const botdIds = new Set(botdBets.map(b => b.match_id + b.recommended_outcome));
-    return topBets.filter(b => !botdIds.has(b.match_id + b.recommended_outcome));
-  }, [topBets, botdBets]);
+    return topBets.slice(3);
+  }, [topBets]);
 
-  // Сортировка для раздела "Все прогнозы капперов"
+  // Сортировка и поиск для раздела "Все прогнозы капперов"
   const sortedCappersBets = useMemo(() => {
-    const list = [...topBets];
+    let list = [...topBets];
+    if (cappersSearch.trim()) {
+      const q = cappersSearch.toLowerCase().trim();
+      list = list.filter(b => {
+        const homeRu = toRussianTeam(b.home_team || '').toLowerCase();
+        const awayRu = toRussianTeam(b.away_team || '').toLowerCase();
+        const mRu = toRussianMatchName(b.match_name || '').toLowerCase();
+        const lRu = toRussianLeague(b.league || '').toLowerCase();
+        const homeOrig = (b.home_team || '').toLowerCase();
+        const awayOrig = (b.away_team || '').toLowerCase();
+        const mOrig = (b.match_name || '').toLowerCase();
+        const lOrig = (b.league || '').toLowerCase();
+        return homeRu.includes(q) || awayRu.includes(q) || mRu.includes(q) || lRu.includes(q) ||
+               homeOrig.includes(q) || awayOrig.includes(q) || mOrig.includes(q) || lOrig.includes(q);
+      });
+    }
     if (cappersSort === 'confidence') {
       return list.sort((a, b) => (b.confidence_score || 0) - (a.confidence_score || 0));
     }
@@ -155,14 +183,22 @@ function App() {
       });
     }
     return list;
-  }, [topBets, cappersSort]);
+  }, [topBets, cappersSort, cappersSearch]);
+
+
 
   const activeSportLabel = sportsList.find(s => s.id === currentSport)?.label || currentSport;
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-[#090d16] text-gray-100 selection:bg-blue-500/30 selection:text-white">
-      {/* Шапка сайта: чистая, просторная, без скученных кнопок */}
-      <Header onOpenSources={() => setIsSourcesOpen(true)} />
+      {/* Новая ультрасовременная двухъярусная шапка с интегрированной навигацией */}
+      <Header 
+        onOpenSources={() => setIsSourcesOpen(true)}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        botdCount={top3Bets.length}
+        cappersCount={topBets.length}
+      />
 
       <div className="flex-grow max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <main className="w-full min-w-0">
@@ -173,148 +209,70 @@ function App() {
             </div>
           )}
 
-          {/* БОЛЬШИЕ КНОПКИ ВИДОВ СПОРТА (СПУЩЕНЫ ВНИЗ И УВЕЛИЧЕНЫ) */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between gap-2 mb-3 px-1">
-              <span className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                <span>Выберите вид спорта:</span>
-              </span>
+          {/* КОМПАКТНЫЙ СТИЛЬНЫЙ ФИЛЬТР ВИДОВ СПОРТА */}
+          {['botd', 'cappers', 'matches', 'archive'].includes(activeTab) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-2 sm:p-2.5 bg-gray-900/40 border border-white/[0.06] rounded-2xl">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-gray-400 px-2 flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Спорт:</span>
+                </span>
+
+                {sportsList.map((sport) => {
+                  const isActive = currentSport === sport.id;
+                  const count = sport.id === 'All' ? topBets.length : (sportCounts[sport.id] || 0);
+
+                  return (
+                    <button
+                      key={sport.id}
+                      onClick={() => setCurrentSport(sport.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer select-none
+                        ${isActive 
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400 scale-[1.02]' 
+                          : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-gray-300 hover:text-white'
+                        }`}
+                    >
+                      <span className="text-sm">{sport.icon}</span>
+                      <span>{sport.label}</span>
+                      {count > 0 && (
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-gray-800 text-gray-300'
+                        }`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
               {currentSport !== 'All' && (
                 <button
                   onClick={() => setCurrentSport('All')}
-                  className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
                 >
-                  Сбросить на «Все виды»
+                  Сбросить фильтр ✕
                 </button>
               )}
             </div>
-
-            <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
-              {sportsList.map((sport) => {
-                const isActive = currentSport === sport.id;
-                const count = sport.id === 'All' ? topBets.length : (sportCounts[sport.id] || 0);
-
-                return (
-                  <button
-                    key={sport.id}
-                    onClick={() => setCurrentSport(sport.id)}
-                    className={`group flex items-center gap-2.5 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl text-xs sm:text-sm font-black transition-all whitespace-nowrap shadow-md cursor-pointer select-none
-                      ${isActive 
-                        ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/60 scale-[1.03]' 
-                        : 'bg-gray-900/90 hover:bg-gray-800/90 border border-gray-800 text-gray-300 hover:text-white hover:border-gray-700 hover:scale-[1.01]'
-                      }`}
-                  >
-                    <span className="text-base sm:text-lg group-hover:scale-110 transition-transform">
-                      {sport.icon}
-                    </span>
-                    <span className="tracking-wide">{sport.label}</span>
-                    {count > 0 && (
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-black transition-colors ${
-                        isActive 
-                          ? 'bg-white/20 text-white border border-white/30' 
-                          : 'bg-gray-800 text-gray-400 group-hover:text-gray-200 border border-gray-700/60'
-                      }`}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* НАВИГАЦИЯ ПО РАЗДЕЛАМ (ТАБЫ) */}
-          <div className="flex items-center gap-2 p-1.5 bg-gray-900/90 border border-gray-800 rounded-2xl mb-8 overflow-x-auto shadow-md scrollbar-none [&::-webkit-scrollbar]:hidden">
-            <button
-              onClick={() => setActiveTab('botd')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap ${
-                activeTab === 'botd'
-                  ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white shadow-lg shadow-amber-500/25 ring-1 ring-amber-400/50 scale-[1.02]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>🏆 Ставки Дня и Кандидаты</span>
-              {botdBets.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
-                  {botdBets.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('cappers')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap ${
-                activeTab === 'cappers'
-                  ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 ring-1 ring-blue-400/50 scale-[1.02]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-              }`}
-            >
-              <Flame className="w-4 h-4 text-orange-400" />
-              <span>🔥 Все прогнозы капперов</span>
-              {topBets.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
-                  {topBets.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('parlays')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap ${
-                activeTab === 'parlays'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 ring-1 ring-orange-400/50 scale-[1.02]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-              }`}
-            >
-              <Zap className="w-4 h-4 text-amber-300" />
-              <span>⚡ Экспресс Дня</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('matches')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap ${
-                activeTab === 'matches'
-                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/25 ring-1 ring-cyan-400/50 scale-[1.02]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-              }`}
-            >
-              <CalendarDays className="w-4 h-4 text-cyan-300" />
-              <span>📋 Расписание матчей</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('archive')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap ${
-                activeTab === 'archive'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-400/50 scale-[1.02]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-              }`}
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Архив счетов</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('stats')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap ${
-                activeTab === 'stats'
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/25 ring-1 ring-purple-400/50 scale-[1.02]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-              }`}
-            >
-              <Trophy className="w-4 h-4 text-yellow-400" />
-              <span>Рейтинг капперов</span>
-            </button>
-          </div>
+          )}
 
           {/* РАЗДЕЛ 1: СТАВКИ ДНЯ И КАНДИДАТЫ (Главный экран) */}
           {activeTab === 'botd' && (
-            <div className="space-y-12 animate-fade-in">
-              {/* Баннер Экспресса Дня */}
-              <div 
-                onClick={() => setActiveTab('parlays')}
+            <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-8 animate-fade-in">
+              {/* ЛЕВАЯ КОЛОНКА В СТОЛБИК: ТРЕКЕР СТАВКИ ДНЯ ПО ДНЯМ И МЕСЯЦАМ */}
+              <aside className="w-full lg:w-[350px] xl:w-[380px] shrink-0 lg:sticky lg:top-24">
+                <MonthlyPerformanceWidget 
+                  todayBotd={mainBotd} 
+                  todayRobobet={robobetBotd} 
+                />
+              </aside>
+
+              {/* ПРАВАЯ ЧАСТЬ: СТАВКИ ДНЯ СЕГОДНЯ, ЭКСПРЕССЫ И КАНДИДАТЫ */}
+              <div className="flex-1 min-w-0 space-y-8 w-full">
+                {/* Баннер Экспресса Дня */}
+                <div 
+                  onClick={() => setActiveTab('parlays')}
                 className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-orange-950/30 to-purple-950/30 border border-orange-500/30 hover:border-orange-500/60 transition-all cursor-pointer flex items-center justify-between gap-4 group shadow-lg"
               >
                 <div className="flex items-center gap-3.5">
@@ -339,16 +297,16 @@ function App() {
                 </div>
               </div>
 
-              {/* БЛОК 1: ГЛАВНЫЕ СТАВКИ ДНЯ */}
+              {/* БЛОК 1: ТОП-3 СТАВКИ ДНЯ (Строго 1 ставка дня!) */}
               <section>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                   <div>
                     <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2.5">
                       <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
-                      <span>Главные Ставки Дня {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
+                      <span>Топ-3 Ставки Дня {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
                     </h2>
                     <p className="text-xs sm:text-sm text-gray-400 mt-1">
-                      Ключевой выбор нейросети и экспертов: 1 самый надежный выверенный матч в своей категории
+                      Три лучших зафиксированных матча за день: 👑 <strong>Ставка Дня</strong> (главный фаворит консенсуса) + Топ-2 и Топ-3
                     </p>
                   </div>
 
@@ -399,18 +357,38 @@ function App() {
                   </div>
                 )}
 
-                {/* Сетка Ставок Дня */}
+                {/* Сетка Топ-3 Ставок Дня (Только 1 из трех является Ставкой Дня!) */}
                 {loading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="h-64 bg-card rounded-2xl border border-gray-800 animate-pulse"></div>
                     ))}
                   </div>
-                ) : botdBets.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                    {botdBets.map(bet => (
-                      <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
-                    ))}
+                ) : top3Bets.length > 0 ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                      {top3Bets.map(bet => (
+                        <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
+                      ))}
+                    </div>
+
+                    {/* Дополнительная карточка от Робобет ИИ */}
+                    {(currentSport === 'All' || currentSport === 'Football') && robobetBotd && (
+                      <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/20 via-cyan-950/20 to-gray-900 border border-cyan-500/30">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Bot className="w-4 h-4 text-cyan-400" />
+                          <span className="text-xs font-black text-cyan-300 uppercase tracking-wider font-heading">
+                            Математический выбор дня • Робобет ИИ
+                          </span>
+                        </div>
+                        <div className="max-w-md">
+                          <RobobetCard 
+                            botd={robobetBotd} 
+                            onOpenRobobetTab={() => setActiveTab('robobet')} 
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-12 bg-gray-900/50 rounded-3xl border border-gray-800 text-gray-400">
@@ -445,7 +423,13 @@ function App() {
                   </div>
                 </section>
               )}
+              </div>
             </div>
+          )}
+
+          {/* РАЗДЕЛ: РОБОБЕТ ИИ (МАТЕМАТИЧЕСКАЯ МОДЕЛЬ ВЕРОЯТНОСТЕЙ) */}
+          {activeTab === 'robobet' && (
+            <RobobetView topBets={topBets} />
           )}
 
           {/* РАЗДЕЛ 2: ВСЕ ПРОГНОЗЫ КАППЕРОВ (Сортировка и каталог) */}
@@ -465,42 +449,65 @@ function App() {
                   </p>
                 </div>
 
-                {/* Панель сортировки */}
-                <div className="flex items-center gap-1.5 p-1 bg-gray-950/80 rounded-xl border border-gray-800 shrink-0">
-                  <span className="text-[11px] font-bold text-gray-500 px-2 flex items-center gap-1">
-                    <ArrowUpDown className="w-3 h-3" />
-                    <span>Сортировка:</span>
-                  </span>
-                  <button
-                    onClick={() => setCappersSort('confidence')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      cappersSort === 'confidence'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    ⚡ По уверенности
-                  </button>
-                  <button
-                    onClick={() => setCappersSort('odds')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      cappersSort === 'odds'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    📈 По коэффициенту
-                  </button>
-                  <button
-                    onClick={() => setCappersSort('cappers')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      cappersSort === 'cappers'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    👥 По числу капперов
-                  </button>
+                {/* Поиск и панель сортировки */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Быстрый поиск прогноза */}
+                  <div className="relative min-w-[200px] max-w-xs flex-1">
+                    <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={cappersSearch}
+                      onChange={(e) => setCappersSearch(e.target.value)}
+                      placeholder="Поиск по команде/лиге..."
+                      className="w-full bg-gray-950/90 border border-gray-800 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                    {cappersSearch && (
+                      <button
+                        onClick={() => setCappersSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Панель сортировки */}
+                  <div className="flex items-center gap-1.5 p-1 bg-gray-950/80 rounded-xl border border-gray-800 shrink-0">
+                    <span className="text-[11px] font-bold text-gray-500 px-2 flex items-center gap-1">
+                      <ArrowUpDown className="w-3 h-3" />
+                      <span>Сортировка:</span>
+                    </span>
+                    <button
+                      onClick={() => setCappersSort('confidence')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        cappersSort === 'confidence'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      ⚡ По уверенности
+                    </button>
+                    <button
+                      onClick={() => setCappersSort('odds')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        cappersSort === 'odds'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      📈 По коэффициенту
+                    </button>
+                    <button
+                      onClick={() => setCappersSort('cappers')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        cappersSort === 'cappers'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      👥 По числу капперов
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -563,43 +570,12 @@ function App() {
             </section>
           )}
 
-          {/* РАЗДЕЛ 5: АРХИВ ЗАВЕРШЁННЫХ МАТЧЕЙ И СЧЕТА */}
+          {/* РАЗДЕЛ 5: ИНТЕРАКТИВНЫЙ АРХИВ ЗАВЕРШЁННЫХ МАТЧЕЙ И TRACK RECORD */}
           {activeTab === 'archive' && (
-            <section className="space-y-6 animate-fade-in">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                    <span>Архив завершённых матчей {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
-                  </h2>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Финальные счета и автоматическая верификация проходимости ставок
-                  </p>
-                </div>
-              </div>
-
-              {loadingArchive ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="h-64 bg-card rounded-2xl border border-gray-800 animate-pulse"></div>
-                  ))}
-                </div>
-              ) : archiveBets.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                  {archiveBets.map(bet => (
-                    <TopBetCard key={bet.match_id + bet.recommended_outcome} bet={bet} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 bg-gray-900/60 rounded-3xl border border-gray-800 text-gray-400">
-                  <CheckCircle2 className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-base font-semibold text-gray-300">Завершённых событий пока нет</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Как только сегодняшние матчи закончатся, их финальный счёт и результат отобразятся здесь.
-                  </p>
-                </div>
-              )}
-            </section>
+            <ArchiveView 
+              currentSport={currentSport} 
+              activeSportLabel={activeSportLabel} 
+            />
           )}
 
           {/* РАЗДЕЛ 6: РЕЙТИНГ КАППЕРОВ И СТАТИСТИКА */}

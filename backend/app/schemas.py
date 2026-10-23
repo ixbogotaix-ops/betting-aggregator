@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Union, Any
 from .models import SourceType, MatchStatus, ResultStatus
 
 # --- Source Schemas ---
@@ -71,6 +71,8 @@ class MatchResponse(MatchBase):
     predictions: List[PredictionResponse] = []
     home_logo: Optional[str] = None
     away_logo: Optional[str] = None
+    final_score_home: Optional[int] = None
+    final_score_away: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -82,6 +84,8 @@ class TopBetPredictionDetail(BaseModel):
     odds: float
     confidence_score: Optional[float] = None
     source_weight: Optional[float] = 1.0
+    sport_winrate: Optional[float] = None
+    tier: Optional[str] = None
     reasoning: Optional[str] = None
     status: Optional[str] = None
 
@@ -115,6 +119,8 @@ class TopBetResponse(BaseModel):
     final_score_away: Optional[int] = None
     status: Optional[str] = "upcoming"
     bet_result: Optional[str] = None
+    daily_rank: Optional[int] = None
+    slot_label: Optional[str] = None
     all_predictions: List[TopBetPredictionDetail] = []
   
 class SourceStatusResponse(BaseModel):  
@@ -138,6 +144,7 @@ class PerformanceOverview(BaseModel):
 class SourceLeaderboardItem(BaseModel):
     source_name: str
     source_type: str
+    sport: Optional[str] = "All"
     total_bets: int
     wins: int
     losses: int
@@ -145,13 +152,17 @@ class SourceLeaderboardItem(BaseModel):
     winrate_pct: float
     roi_pct: float
     net_profit: float
+    dynamic_weight: Optional[float] = 1.0
+    tier: Optional[str] = "neutral"
 
 class PerformanceStatsResponse(BaseModel):
     overview: PerformanceOverview
     leaderboard: List[SourceLeaderboardItem]
+    sports_breakdown: Optional[Dict[str, List[SourceLeaderboardItem]]] = {}
+    available_sports: Optional[List[str]] = []
 
 class ParlayItem(BaseModel):
-    match_id: int
+    match_id: Union[int, str]
     match_name: str
     match_date: datetime
     sport_type: str
@@ -174,6 +185,7 @@ class ParlayCard(BaseModel):
     items: List[ParlayItem] = []
 
 class DailyParlaysResponse(BaseModel):
+    ai_parlay: Optional[ParlayCard] = None
     safe_parlay: Optional[ParlayCard] = None
     hot_parlay: Optional[ParlayCard] = None
 

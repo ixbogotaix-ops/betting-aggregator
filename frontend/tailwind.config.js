@@ -6,6 +6,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        heading: ['"Montserrat"', '"Plus Jakarta Sans"', 'sans-serif'],
+      },
       colors: {
         dark: '#0f172a',
         darker: '#0b1120',

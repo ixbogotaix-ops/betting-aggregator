@@ -18,7 +18,7 @@ def detect_sport(text: str = "", league: str = "", teams: str = "") -> str:
         return "Basketball"
     if any(k in s for k in ["теннис", "atp", "wta", "itf", "tennis", "сет", "гейм", "паолини", "картал", "джокович", "алькарас"]):
         return "Tennis"
-    if any(k in s for k in ["mma", "ufc", "мма", "юфс", "бокс", "boxing", "бой"]):
+    if any(k in s for k in ["mma", "ufc", "мма", "юфс", "бокс", "boxing", "боевых", "единоборств", "нокаут"]) or re.search(r'\bбо[яеий]\b', s):
         return "MMA"
     if any(k in s for k in ["esport", "киберспорт", "cs:go", "cs2", "dota", "valorant"]):
         return "Esports"

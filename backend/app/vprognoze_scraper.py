@@ -16,13 +16,19 @@ logger = logging.getLogger(__name__)
 
 def detect_sport(text: str = "", league: str = "", teams: str = "") -> str:
     s = f"{text} {league} {teams}".lower()
+    # Футбол проверяем в первую очередь при наличии явных маркеров
+    if any(k in s for k in [
+        "футбол", "football", "soccer", "угл", "фолы", "офсайд", "реал", "сосьедад", "альмерия",
+        "бундеслига", "серия а", "ла лига", "апл", "рпл", "сегунда", "uefa", "гол", "тайм"
+    ]):
+        return "Football"
     if any(k in s for k in ["хоккей", "кхл", "нхл", "вхл", "мхл", "hockey", "nhl", "khl", "шайб", "буллит", "овертайм", "ска-", "нефтяник"]):
         return "Hockey"
     if any(k in s for k in ["баскетбол", "nba", "нба", "евролига", "втб", "basketball", "euroleague"]):
         return "Basketball"
     if any(k in s for k in ["теннис", "atp", "wta", "itf", "tennis", "сет", "гейм", "паолини", "картал", "джокович", "алькарас"]):
         return "Tennis"
-    if any(k in s for k in ["mma", "ufc", "мма", "юфс", "бокс", "boxing", "бой"]):
+    if re.search(r'\b(mma|ufc|bellator|мма|юфс|бокс|бокса|бокси|boxing)\b', s):
         return "MMA"
     if any(k in s for k in ["esport", "киберспорт", "cs:go", "cs2", "dota", "valorant"]):
         return "Esports"
@@ -30,7 +36,7 @@ def detect_sport(text: str = "", league: str = "", teams: str = "") -> str:
 
 def clean_name(name: str) -> str:
     name = unidecode(name).lower()
-    for char in ['-', '.', ',', 'fc', 'фк']:
+    for char in ['-', '.', ',', 'fc', 'фк', 'tc', 'sc', 'cf', 'bc', 'jk', 'бк']:
         name = name.replace(char, ' ')
     return ' '.join(name.split())
 
@@ -45,13 +51,18 @@ def match_teams(team1: str, team2: str, real_matches: List[Match]) -> Match:
         r_home = clean_name(rm.home_team)
         r_away = clean_name(rm.away_team)
         
-        # прямая проверка
-        score1 = (fuzz.partial_ratio(team1_clean, r_home) + fuzz.partial_ratio(team2_clean, r_away)) / 2
+        # прямая проверка (обе команды обязаны совпасть!)
+        sh1 = fuzz.token_set_ratio(team1_clean, r_home)
+        sa1 = fuzz.token_set_ratio(team2_clean, r_away)
+        score1 = (sh1 + sa1) / 2.0 if (sh1 >= 65 and sa1 >= 65) else 0.0
+        
         # реверс (вдруг перепутаны местами)
-        score2 = (fuzz.partial_ratio(team1_clean, r_away) + fuzz.partial_ratio(team2_clean, r_home)) / 2
+        sh2 = fuzz.token_set_ratio(team1_clean, r_away)
+        sa2 = fuzz.token_set_ratio(team2_clean, r_home)
+        score2 = (sh2 + sa2) / 2.0 if (sh2 >= 65 and sa2 >= 65) else 0.0
         
         max_score = max(score1, score2)
-        if max_score > best_score and max_score > 75:  # Порог 75
+        if max_score > 75 and max_score > best_score:
             best_score = max_score
             best_match = rm
             

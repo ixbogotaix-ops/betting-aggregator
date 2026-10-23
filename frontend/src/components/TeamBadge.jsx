@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shield } from 'lucide-react';
 
 // Палитра градиентов для векторных бейджей команд без официальной эмблемы
@@ -26,8 +26,12 @@ const getGradientIndex = (str = '') => {
 const getInitials = (name = '') => {
   if (!name) return 'BK';
   
+  // Убираем маркеры резерва, молодежки, дубля, возраста: (рез), (мол), (19), (u19), (2), (b)
+  let clean = name.replace(/\((рез|резерв|мол|молодежь|дубль|u?\d+|ii|b|youth)\)/gi, '').trim();
+  // Убираем испанские/португальские служебные связки де, дель, ла, да
+  clean = clean.replace(/\b(де|дель|ла|да|ди|ван|дер)\b/gi, '').trim();
   // Убираем спортивные префиксы
-  let clean = name.replace(/^(1\.\s*|1\s+fc\s+|pfc\s+|cf\s+|ca\s+|cd\s+|rc\s+|sc\s+|fsv\s+|fc\s+|fk\s+)/i, '').trim();
+  clean = clean.replace(/^(1\.\s*|1\s+fc\s+|pfc\s+|cf\s+|ca\s+|cd\s+|rc\s+|sc\s+|fsv\s+|fc\s+|fk\s+)/i, '').trim();
   clean = clean.replace(/\b(tc|fc|cf|if|ik|hk|sk|hc|bk|fk|ac|bc)\b/gi, '').trim();
   
   const words = clean.split(/[\s\-_]+/).filter(Boolean);
@@ -40,17 +44,45 @@ const getInitials = (name = '') => {
   return name.slice(0, 2).toUpperCase();
 };
 
+const FALLBACK_LOGOS = {
+  'бенфика': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
+  'benfica': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
+  'неймеген': 'https://r2.thesportsdb.com/images/media/team/badge/t5qjle1701019868.png',
+  'нек': 'https://r2.thesportsdb.com/images/media/team/badge/t5qjle1701019868.png',
+  'нек неймеген': 'https://r2.thesportsdb.com/images/media/team/badge/t5qjle1701019868.png',
+  'nec nijmegen': 'https://r2.thesportsdb.com/images/media/team/badge/t5qjle1701019868.png',
+  'лион': 'https://r2.thesportsdb.com/images/media/team/badge/830lrz1757669895.png',
+  'асвел': 'https://r2.thesportsdb.com/images/media/team/badge/830lrz1757669895.png',
+  'asvel': 'https://r2.thesportsdb.com/images/media/team/badge/830lrz1757669895.png',
+  'селтик': 'https://r2.thesportsdb.com/images/media/team/badge/3uv1641758780002.png',
+  'celtic': 'https://r2.thesportsdb.com/images/media/team/badge/3uv1641758780002.png',
+  'левски': 'https://r2.thesportsdb.com/images/media/team/badge/evevzv1626443555.png',
+  'левски софия': 'https://r2.thesportsdb.com/images/media/team/badge/evevzv1626443555.png',
+  'реал мадрид': 'https://a.espncdn.com/i/teamlogos/soccer/500/86.png',
+  'real madrid': 'https://a.espncdn.com/i/teamlogos/soccer/500/86.png',
+};
+
 /**
  * Универсальный компонент эмблемы команды:
  * - Если есть валидный CDN-URL логотипа — отображает официальный прозрачный PNG
- * - Если логотип отсутствует или ошибка загрузки — отображает стильный векторный бейдж-щит
- *   с монограммой команды, градиентом и металлической рамкой.
+ * - Если логотип отсутствует или ошибка загрузки — проверяет fallback-словарь,
+ *   а затем отображает стильный векторный бейдж-щит с монограммой.
  */
 const TeamBadge = ({ teamName = '', logoUrl = '', size = 'md', className = '' }) => {
   const [imageError, setImageError] = useState(false);
+  const [fallbackError, setFallbackError] = useState(false);
 
-  // Валидный ли URL логотипа (исключаем ui-avatars)
-  const isValidLogo = Boolean(
+  // Сбрасываем ошибку при смене ссылки на логотип или названия команды
+  useEffect(() => {
+    setImageError(false);
+    setFallbackError(false);
+  }, [logoUrl, teamName]);
+
+  const cleanKey = (teamName || '').toLowerCase().trim();
+  const fallbackUrl = FALLBACK_LOGOS[cleanKey];
+
+  // Валидный ли основной URL логотипа (исключаем ui-avatars)
+  const isPrimaryValid = Boolean(
     logoUrl && 
     typeof logoUrl === 'string' && 
     logoUrl.startsWith('http') && 
@@ -58,28 +90,40 @@ const TeamBadge = ({ teamName = '', logoUrl = '', size = 'md', className = '' })
     !imageError
   );
 
-  // Размеры контейнера
+  const effectiveLogoUrl = isPrimaryValid ? logoUrl : (!fallbackError && fallbackUrl ? fallbackUrl : null);
+  const isValidLogo = Boolean(effectiveLogoUrl);
+
+  // Размеры контейнера (крупные, заметные и сочные)
   const sizeClasses = {
-    sm: 'w-9 h-9 min-w-[36px] text-xs rounded-xl p-1',
-    md: 'w-12 h-12 min-w-[48px] text-sm rounded-2xl p-1.5',
-    lg: 'w-14 h-14 min-w-[56px] text-base rounded-2xl p-2',
-  }[size] || 'w-12 h-12 rounded-2xl p-1.5';
+    xs: 'w-7 h-7 min-w-[28px] text-[10px] rounded-lg p-0.5',
+    sm: 'w-10 h-10 min-w-[40px] text-xs rounded-xl p-1',
+    md: 'w-13 h-13 min-w-[52px] text-sm rounded-2xl p-1.5',
+    lg: 'w-16 h-16 min-w-[64px] text-base rounded-2xl p-2',
+    xl: 'w-20 h-20 min-w-[80px] text-lg rounded-3xl p-2.5',
+  }[size] || 'w-13 h-13 rounded-2xl p-1.5';
 
   const initials = getInitials(teamName);
   const gradientClass = BADGE_GRADIENTS[getGradientIndex(teamName)];
 
   return (
     <div 
-      className={`relative flex items-center justify-center bg-gray-900/90 ring-1 ring-gray-700/70 shadow-lg shrink-0 overflow-hidden select-none transition-all group-hover:scale-105 group-hover:ring-blue-500/50 ${sizeClasses} ${className}`}
+      className={`relative flex items-center justify-center bg-gray-950/85 ring-1 ring-gray-700/80 shadow-2xl shrink-0 overflow-hidden select-none transition-all duration-300 group-hover:scale-105 group-hover:ring-blue-500/60 ${sizeClasses} ${className}`}
       title={teamName}
     >
       {isValidLogo ? (
         <img
-          src={logoUrl}
+          src={effectiveLogoUrl}
           alt={teamName}
           loading="lazy"
-          className="max-w-full max-h-full object-contain filter drop-shadow-md transition-transform duration-300"
-          onError={() => setImageError(true)}
+          className="w-full h-full object-contain filter drop-shadow-[0_3px_6px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover:scale-105"
+          onError={() => {
+            if (isPrimaryValid && fallbackUrl && !fallbackError) {
+              setImageError(true);
+            } else {
+              setFallbackError(true);
+              setImageError(true);
+            }
+          }}
         />
       ) : (
         /* Стилизованный Векторный Бейдж-Щит с монограммой */

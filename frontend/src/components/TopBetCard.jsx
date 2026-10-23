@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import MatchDetailModal from './MatchDetailModal';
 import TeamBadge from './TeamBadge';
+import { toRussianTeam, toRussianLeague } from '../utils/russianNames';
 
 const formatHandicapVal = (valStr) => {
   if (!valStr) return '0';
@@ -262,6 +263,183 @@ export const getSportDisplay = (sport, league = '') => {
 
 export const getRussianSport = (sport) => getSportDisplay(sport).name.toUpperCase();
 
+export const formatLeagueDisplay = (league = '', countryName = '') => {
+  if (!league) return countryName || 'Лига';
+  const l = league.toLowerCase().trim();
+
+  // 1. Еврокубки и международные турниры
+  if (l.includes('champs_league') || l.includes('champions_league') || l.includes('лига чемпионов') || l.includes('лиге чемпионов')) {
+    return 'Лига чемпионов УЕФА';
+  }
+  if (l.includes('europa_league') || l.includes('лига европы') || l.includes('лиге европы')) {
+    return 'Лига Европы УЕФА';
+  }
+  if (l.includes('conference_league') || l.includes('лига конференций')) {
+    return 'Лига конференций УЕФА';
+  }
+  if (l.includes('nations_league') || l.includes('лига наций')) {
+    return 'Лига наций УЕФА';
+  }
+  if (l.includes('copa_libertadores') || l.includes('либертадорес')) {
+    return 'Кубок Либертадорес';
+  }
+  if (l.includes('copa_sudamericana') || l.includes('судамерикана')) {
+    return 'Южноамериканский кубок';
+  }
+
+  // 2. Англия
+  if (l.includes('soccer_epl') || l.includes('premier_league') || l.includes('epl') || l === 'премьер-лига' || l.includes('апл')) {
+    return 'АПЛ • Чемпионат Англии';
+  }
+  if (l.includes('championship') || l.includes('чемпионшип')) {
+    return 'Чемпионшип • Англия';
+  }
+  if (l.includes('fa_cup') || l.includes('кубок англии')) {
+    return 'Кубок Англии';
+  }
+  if (l.includes('efl_cup') || l.includes('кубок лиги')) {
+    return 'Кубок лиги • Англия';
+  }
+
+  // 3. Испания
+  if (l.includes('spain_la_liga') || l.includes('la_liga') || l.includes('laliga') || l.includes('ла лига') || l.includes('примера испания')) {
+    return 'Ла Лига • Чемпионат Испании';
+  }
+  if (l.includes('segunda') || l.includes('сегунда')) {
+    return 'Сегунда • Испания';
+  }
+  if (l.includes('copa_del_rey') || l.includes('кубок короля') || l.includes('кубок испании')) {
+    return 'Кубок Испании';
+  }
+
+  // 4. Италия
+  if (l.includes('italy_serie_a') || l.includes('serie_a') || l.includes('серия а') || l.includes('серия a')) {
+    return 'Серия А • Чемпионат Италии';
+  }
+  if (l.includes('italy_serie_b') || l.includes('serie_b') || l.includes('серия б') || l.includes('серия b')) {
+    return 'Серия B • Чемпионат Италии';
+  }
+  if (l.includes('coppa_italia') || l.includes('кубок италии')) {
+    return 'Кубок Италии';
+  }
+
+  // 5. Германия
+  if (l.includes('germany_bundesliga2') || l.includes('bundesliga2') || l.includes('вторая бундеслига')) {
+    return 'Вторая Бундеслига • Германия';
+  }
+  if (l.includes('germany_bundesliga') || l.includes('bundesliga') || l.includes('бундеслига')) {
+    return 'Бундеслига • Чемпионат Германии';
+  }
+  if (l.includes('dfb_pokal') || l.includes('кубок германии')) {
+    return 'Кубок Германии';
+  }
+
+  // 6. Франция
+  if (l.includes('france_ligue_two') || l.includes('ligue_2') || l.includes('лига 2')) {
+    return 'Лига 2 • Чемпионат Франции';
+  }
+  if (l.includes('france_ligue_one') || l.includes('ligue_1') || l.includes('лига 1')) {
+    return 'Лига 1 • Чемпионат Франции';
+  }
+  if (l.includes('coupe_de_france') || l.includes('кубок франции')) {
+    return 'Кубок Франции';
+  }
+
+  // 7. Россия
+  if (l.includes('russia_premier_league') || l.includes('rpl') || l.includes('рпл') || l.includes('премьер-лига россия')) {
+    return 'РПЛ • Чемпионат России';
+  }
+  if (l.includes('fnl') || l.includes('фнл') || l.includes('первая лига')) {
+    return 'Первая лига • Россия';
+  }
+  if (l.includes('кубок россии') || l.includes('russian_cup')) {
+    return 'Кубок России';
+  }
+
+  // 8. Другие европейские чемпионаты
+  if (l.includes('eredivisie') || l.includes('нидерланд')) {
+    return 'Эредивизи • Нидерланды';
+  }
+  if (l.includes('primeira_liga') || l.includes('португал')) {
+    return 'Примейра • Португалия';
+  }
+  if (l.includes('super_lig') || l.includes('турци')) {
+    return 'Суперлига • Турция';
+  }
+  if (l.includes('belgium_first_div') || l.includes('бельги')) {
+    return 'Про-Лига • Бельгия';
+  }
+  if (l.includes('brazil') || l.includes('brasileirao') || l.includes('бразил')) {
+    return 'Серия А • Бразилия';
+  }
+  if (l.includes('argentina') || l.includes('аргентин')) {
+    return 'Примера • Аргентина';
+  }
+  if (l.includes('mls') || l.includes('млс')) {
+    return 'МЛС • Чемпионат США';
+  }
+  if (l.includes('saudi') || l.includes('саудов')) {
+    return 'Про-Лига • Саудовская Аравия';
+  }
+
+  // 9. Хоккей
+  if (l.includes('nhl') || l.includes('нхл')) {
+    return 'НХЛ • Регулярный чемпионат';
+  }
+  if (l.includes('khl') || l.includes('кхл')) {
+    return 'КХЛ • Континентальная лига';
+  }
+  if (l.includes('vhl') || l.includes('вхл')) {
+    return 'ВХЛ • Чемпионат России';
+  }
+  if (l.includes('mhl') || l.includes('мхл')) {
+    return 'МХЛ • Молодежная лига';
+  }
+  if (l.includes('allsvenskan')) {
+    return 'Allsvenskan • Чемпионат Швеции';
+  }
+  if (l.includes('shl') || l.includes('шхл')) {
+    return 'ШХЛ • Чемпионат Швеции';
+  }
+  if (l.includes('liiga')) {
+    return 'Лиига • Чемпионат Финляндии';
+  }
+
+  // 10. Баскетбол
+  if (l.includes('nba') || l.includes('нба')) {
+    return 'НБА • Чемпионат США';
+  }
+  if (l.includes('euroleague') || l.includes('евролига')) {
+    return 'Евролига • Баскетбол';
+  }
+  if (l.includes('vtb') || l.includes('втб')) {
+    return 'Единая лига ВТБ';
+  }
+
+  // 11. Американский футбол
+  if (l.includes('nfl') || l.includes('нфл')) {
+    return 'НФЛ • Американский футбол';
+  }
+  if (l.includes('ncaaf') || l.includes('ncaa')) {
+    return 'NCAA • Студенческий футбол США';
+  }
+
+  // 12. Единоборства и теннис
+  if (l.includes('ufc') || l.includes('mma') || l.includes('мма')) {
+    return 'UFC • Бои';
+  }
+  if (l.includes('tennis') || l.includes('atp') || l.includes('wta')) {
+    return 'ATP / WTA Тур • Теннис';
+  }
+
+  // Если строка была технической soccer_xxx -> очищаем
+  if (league.startsWith('soccer_') || league.startsWith('basketball_') || league.startsWith('icehockey_')) {
+    return league.replace(/^soccer_|^basketball_|^icehockey_/, '').replace(/_/g, ' ').toUpperCase();
+  }
+
+  return league;
+};
+
 const formatCardMoscowTime = (dateStr) => {
   if (!dateStr) return { dateStr: '', timeStr: '' };
   try {
@@ -323,13 +501,17 @@ const TopBetCard = ({ bet }) => {
     borderClass = 'border-amber-500/30';
   }
 
-  // Извлекаем названия команд
-  const [homeTeam, awayTeam] = bet.match_name.includes(' vs ') 
+  // Извлекаем названия команд и переводим на чистый русский язык
+  const [rawHome, rawAway] = bet.match_name.includes(' vs ') 
     ? bet.match_name.split(' vs ') 
     : bet.match_name.split(' - ');
+  const homeTeam = toRussianTeam(bet.home_team || rawHome);
+  const awayTeam = toRussianTeam(bet.away_team || rawAway);
+  const leagueDisplay = toRussianLeague(bet.league, bet.country_name);
 
   const sportDisplay = getSportDisplay(bet.sport_type, bet.league);
   const totalCappersCount = bet.all_predictions?.length || bet.supporting_sources?.length || 0;
+  const supportingCount = bet.supporting_sources?.length || 0;
   const mskTime = formatCardMoscowTime(bet.match_date);
 
   // Определение Live-статуса: матч начался и идёт прямо сейчас (до 2.5 часов от старта)
@@ -347,7 +529,10 @@ const TopBetCard = ({ bet }) => {
       return false;
     }
   };
-  const isLive = isMatchLive();
+
+  const hasScore = bet.final_score_home !== null && bet.final_score_away !== null;
+  const isFinished = hasScore || (bet.status === 'finished' && bet.bet_result !== null);
+  const isLive = !isFinished && (isMatchLive() || bet.status === 'live' || bet.status === 'in_progress');
 
   const sourcesList = (bet.supporting_sources || []).map(s => {
     return s.replace(/\s*\(Рейтинг:.*?\)/g, '').trim();
@@ -359,7 +544,15 @@ const TopBetCard = ({ bet }) => {
     <>
       <div 
         onClick={() => setIsModalOpen(true)}
-        className="h-full flex flex-col justify-between bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 rounded-3xl p-5 border border-gray-800 hover:border-blue-500/50 shadow-xl hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1.5 cursor-pointer transition-all duration-300 relative overflow-hidden group select-none"
+        className={`h-full flex flex-col justify-between bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 rounded-3xl p-5 border ${
+          bet.is_bet_of_the_day 
+            ? 'border-amber-500/60 shadow-2xl shadow-amber-500/20 ring-2 ring-amber-500/30' 
+            : bet.slot_label === 'Топ-2 Дня'
+            ? 'border-blue-500/50 shadow-2xl shadow-blue-500/15 ring-1 ring-blue-500/30'
+            : bet.slot_label === 'Топ-3 Дня'
+            ? 'border-cyan-500/50 shadow-2xl shadow-cyan-500/15 ring-1 ring-cyan-500/30'
+            : 'border-gray-800 hover:border-blue-500/40 shadow-xl hover:shadow-2xl hover:shadow-blue-500/10'
+        } hover:-translate-y-1.5 cursor-pointer transition-all duration-300 relative overflow-hidden group select-none`}
       >
         {/* Фоновое свечение в верхнем углу */}
         <div className={`absolute top-0 right-0 w-32 h-32 opacity-10 rounded-bl-full pointer-events-none blur-xl ${colorClass}`}></div>
@@ -370,77 +563,96 @@ const TopBetCard = ({ bet }) => {
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r ${sportDisplay.color} rounded-full text-xs font-black border shadow-sm shrink-0`}>
                 <span className="text-sm">{sportDisplay.icon}</span>
-                <span className="truncate max-w-[140px] uppercase text-[11px] tracking-wider font-extrabold">
+                <span className="truncate max-w-[140px] uppercase text-[11px] tracking-wider font-extrabold font-heading">
                   {sportDisplay.name}
                 </span>
               </span>
             </div>
 
-            {/* Аккуратная плашка времени по Москве или LIVE */}
+            {/* Аккуратная плашка времени по Москве, LIVE или ЗАВЕРШЁН */}
             {isLive ? (
               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-950/80 rounded-xl border border-red-500/50 text-xs font-black text-red-200 shrink-0 shadow-lg shadow-red-500/20 animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0"></span>
-                <span className="font-extrabold uppercase tracking-wider text-red-300">LIVE</span>
+                <span className="font-extrabold uppercase tracking-wider text-red-300 font-heading">LIVE</span>
                 <span className="text-[10px] text-red-400 font-semibold hidden sm:inline">• ИДЁТ</span>
+              </div>
+            ) : isFinished ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-950/90 rounded-xl border border-gray-700/80 text-xs font-black text-gray-300 shrink-0 shadow-inner">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                <span className="font-mono text-gray-300 font-bold">{mskTime.timeStr}</span>
+                <span className="text-[10px] text-emerald-400 font-black uppercase tracking-wider font-heading">ЗАВЕРШЁН</span>
               </div>
             ) : bet.match_date ? (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-950/90 rounded-xl border border-gray-700/80 text-xs font-black text-gray-200 shrink-0 shadow-inner">
                 <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <span className="whitespace-nowrap">{mskTime.dateStr}, {mskTime.timeStr}</span>
-                <span className="text-[10px] text-blue-400 font-black uppercase tracking-wider">МСК</span>
+                <span className="whitespace-nowrap font-mono">{mskTime.dateStr}, {mskTime.timeStr}</span>
+                <span className="text-[10px] text-blue-400 font-black uppercase tracking-wider font-heading">МСК</span>
               </div>
             ) : null}
           </div>
 
           {/* ПОДШАПКА: Статус "Ставка Дня" + Лига с флагом страны */}
           <div className="flex items-center gap-2 flex-wrap mb-4">
-            {bet.is_bet_of_the_day && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-400/40 shadow-sm animate-pulse">
+            {bet.is_bet_of_the_day ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-300 bg-amber-500/20 px-3 py-1 rounded-xl border border-amber-400/50 shadow-md shadow-amber-500/15 animate-pulse font-heading">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>СТАВКА ДНЯ</span>
+                <span>⭐ СТАВКА ДНЯ</span>
                 <span className="text-amber-500/60">•</span>
-                <span className="text-amber-200 font-semibold">{sportDisplay.name.toUpperCase()}</span>
+                <span className="text-amber-200 font-semibold">{sportDisplay.name.toUpperCase()} (КАППЕРЫ)</span>
               </span>
-            )}
-            <span className="text-[11px] font-semibold text-gray-400 px-2.5 py-0.5 bg-gray-800/60 rounded-md border border-gray-800 truncate max-w-[190px] inline-flex items-center gap-1.5">
+            ) : bet.slot_label === 'Топ-2 Дня' ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-blue-300 bg-blue-500/15 px-2.5 py-1 rounded-xl border border-blue-400/40 shadow-sm font-heading">
+                <span>🥈 ТОП-2 ДНЯ</span>
+              </span>
+            ) : bet.slot_label === 'Топ-3 Дня' ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-cyan-300 bg-cyan-500/15 px-2.5 py-1 rounded-xl border border-cyan-400/40 shadow-sm font-heading">
+                <span>🥉 ТОП-3 ДНЯ</span>
+              </span>
+            ) : bet.slot_label ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-cyan-300 bg-cyan-500/15 px-2.5 py-1 rounded-xl border border-cyan-400/30 shadow-sm font-heading">
+                <Flame className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{bet.slot_label.toUpperCase()}</span>
+              </span>
+            ) : null}
+            <span className="text-xs font-bold text-gray-300 px-3 py-1 bg-gray-800/80 rounded-lg border border-gray-750 truncate max-w-[240px] inline-flex items-center gap-1.5 shadow-sm" title={leagueDisplay}>
               {bet.country_flag_url && (
                 <img 
                   src={bet.country_flag_url} 
                   alt="" 
-                  className="w-3.5 h-2.5 object-cover rounded-[2px] opacity-75 shrink-0" 
+                  className="w-4 h-3 object-cover rounded-[2px] opacity-85 shrink-0" 
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               )}
-              <span className="truncate">{bet.league || bet.country_name || "Лига"}</span>
+              <span className="truncate">{leagueDisplay}</span>
             </span>
           </div>
 
-          {/* БЛОК ПРОТИВОСТОЯНИЯ (Эмблемы и Названия с единой сеткой) */}
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-3 bg-gray-950/50 rounded-2xl border border-gray-800/70 mb-4">
+          {/* БЛОК ПРОТИВОСТОЯНИЯ (Эмблемы и Крупные жирные Названия) */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 p-3.5 bg-gray-950/60 rounded-2xl border border-gray-800/80 mb-4 shadow-inner">
             {/* Хозяева */}
             <div className="flex flex-col items-center text-center">
-              <TeamBadge teamName={homeTeam} logoUrl={bet.home_logo} size="lg" className="mb-2" />
-              <span className="text-xs font-bold text-white leading-tight min-h-[2.4rem] flex items-center justify-center line-clamp-2 px-1">
+              <TeamBadge teamName={homeTeam} logoUrl={bet.home_logo} size="lg" className="mb-2.5" />
+              <span className="text-base sm:text-lg font-black text-white leading-snug min-h-[3rem] flex items-center justify-center line-clamp-2 px-1 tracking-tight text-center drop-shadow-md font-heading hover:text-blue-300 transition-colors">
                 {homeTeam}
               </span>
-              <span className="text-[10px] text-gray-500 font-semibold mt-0.5">Хозяева</span>
+              <span className="text-[11px] text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Хозяева</span>
             </div>
 
             {/* Разделитель VS или Счёт матча */}
-            <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center px-1">
               {bet.final_score_home !== null && bet.final_score_away !== null ? (
                 <div className="flex flex-col items-center">
-                  <div className="px-2.5 py-1 rounded-xl bg-gray-800/90 border border-gray-600 font-black text-sm text-white shadow-md tracking-wider">
+                  <div className="px-2.5 py-1 rounded-xl bg-gray-800/90 border border-gray-600 font-black text-sm text-white shadow-md tracking-wider font-mono">
                     {bet.final_score_home} : {bet.final_score_away}
                   </div>
-                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mt-0.5">ФИНАЛ</span>
+                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mt-0.5 font-heading">ФИНАЛ</span>
                 </div>
               ) : isLive ? (
-                <span className="w-8 h-8 rounded-full bg-red-950/90 border border-red-500/50 flex items-center justify-center text-[10px] font-black text-red-300 shadow-lg shadow-red-500/20 animate-pulse">
+                <span className="w-8 h-8 rounded-full bg-red-950/90 border border-red-500/50 flex items-center justify-center text-[10px] font-black text-red-300 shadow-lg shadow-red-500/20 animate-pulse font-heading">
                   LIVE
                 </span>
               ) : (
-                <span className="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[10px] font-black text-gray-400 italic shadow-inner">
+                <span className="w-8 h-8 rounded-full bg-gray-800/90 border border-gray-700 flex items-center justify-center text-xs font-black text-gray-300 italic shadow-inner font-heading">
                   VS
                 </span>
               )}
@@ -448,11 +660,11 @@ const TopBetCard = ({ bet }) => {
 
             {/* Гости */}
             <div className="flex flex-col items-center text-center">
-              <TeamBadge teamName={awayTeam} logoUrl={bet.away_logo} size="lg" className="mb-2" />
-              <span className="text-xs font-bold text-white leading-tight min-h-[2.4rem] flex items-center justify-center line-clamp-2 px-1">
+              <TeamBadge teamName={awayTeam} logoUrl={bet.away_logo} size="lg" className="mb-2.5" />
+              <span className="text-base sm:text-lg font-black text-white leading-snug min-h-[3rem] flex items-center justify-center line-clamp-2 px-1 tracking-tight text-center drop-shadow-md font-heading hover:text-blue-300 transition-colors">
                 {awayTeam}
               </span>
-              <span className="text-[10px] text-gray-500 font-semibold mt-0.5">Гости</span>
+              <span className="text-[11px] text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Гости</span>
             </div>
           </div>
 
@@ -463,7 +675,11 @@ const TopBetCard = ({ bet }) => {
                 <Users className="w-3.5 h-3.5 text-blue-400" />
                 <span>Консенсус экспертов</span>
                 {totalCappersCount > 0 && (
-                  <span className="text-gray-500 text-[11px]">({totalCappersCount})</span>
+                  <span className="text-gray-500 text-[11px]">
+                    ({supportingCount > 0 && totalCappersCount > supportingCount 
+                      ? `${supportingCount} из ${totalCappersCount}` 
+                      : totalCappersCount})
+                  </span>
                 )}
               </span>
               <span className={`font-black text-sm ${textClass}`}>{bet.confidence_score}%</span>

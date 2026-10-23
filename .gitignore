@@ -43,3 +43,15 @@ test.py
 lb_data.json
 stv_card.txt
 run_ai.py
+capture_*.py
+eval_dom.py
+inspect_browser.py
+get_backend_log.py
+restart_containers.py
+take_screenshot.py
+tunnel_*.py
+verify_*.py
+configure_*.py
+remote_exec.py
+backend/daily_top3_lock.json
+backend/logos_cache.json

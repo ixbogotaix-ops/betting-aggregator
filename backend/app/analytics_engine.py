@@ -17,7 +17,8 @@ def generate_source_reasoning(
     away_team: str,
     outcome: str,
     odds: float,
-    source_weight: float = 1.0
+    source_weight: float = 1.0,
+    winrate: Optional[float] = None
 ) -> str:
     """
     Генерирует конкретные аргументы и размышления каппера/источника, почему выбрана именно эта ставка.
@@ -32,6 +33,14 @@ def generate_source_reasoning(
     is_mma = any(x in s_lower for x in ["mma", "ufc", "мма"])
     
     src = source_name.lower()
+
+    def wrap_res(res_text: str) -> str:
+        if winrate is not None:
+            if winrate >= 70.0:
+                return f"[🔥 Подтверждённая проходимость: {winrate}% побед] {res_text}"
+            elif winrate < 45.0:
+                return f"[⚠️ Пониженный вес в ИИ ({winrate}%)] {res_text}"
+        return res_text
     
     # 1. Глобальные букмекеры / The-Odds-API / Биржи
     if "bookmaker" in src or "odds" in src or "глобал" in src:
@@ -40,7 +49,7 @@ def generate_source_reasoning(
             f"Движение котировок: линия открывалась с более высоким коэффициентом, однако под давлением профессионального пула игроков кэф скорректировался до {odds}. Высокая ликвидность на победу фаворита.",
             f"Рыночная оценка вероятности: биржевой баланс указывает на 62-68% математической вероятности захода «{outcome}». Коэффициент {odds} имеет положительное математическое ожидание (+EV) против закрытия линии."
         ]
-        return rng.choice(templates)
+        return wrap_res(rng.choice(templates))
         
     # 2. StatArea / Zulubet / Статистические ИИ
     if "stat" in src or "zulu" in src or "forebet" in src or "ai" in src or "lab" in src:
@@ -61,7 +70,7 @@ def generate_source_reasoning(
                 f"Статистическая модель Пуассона: вероятность победы/захода оценивается в 68.2%, что выше вероятности, заложенной букмекером (кэф {odds}). Оборона оппонента допускает критические провалы при позиционных атаках.",
                 f"Трендовый скрининг: хозяева/фаворит выиграли 4 из последних 5 матчей по показателю созданных явных голевых моментов (Big Chances Created: 3.2 за игру)."
             ]
-        return rng.choice(templates)
+        return wrap_res(rng.choice(templates))
 
     # 3. Legalbet / Bookmaker-Ratings / Stavka TV / Vprognoze
     if "legal" in src or "рейтинг" in src or "stavka" in src or "vprognoze" in src or "championat" in src or "metaratings" in src:
@@ -82,7 +91,7 @@ def generate_source_reasoning(
                 f"Аргумент ведущего каппера: соперник имеет серию из неудачных выездных матчей и испытывает явный дефицит креатива в созидании. Класс исполнителей фаворита предопределит исход противостояния за кэф {odds}.",
                 f"Тактический расклад: превосходство в опорной зоне и высокая реализация стандартных положений дают решающее преимущество. Ставка «{outcome}» полностью соответствует текущему игровому тонусу команд."
             ]
-        return rng.choice(templates)
+        return wrap_res(rng.choice(templates))
 
     # 4. Telegram-каналы и профессиональные капперы
     if source_type == "telegram_channel" or "capper" in src or "bet" in src or "tg" in src or "union" in src:
@@ -91,10 +100,10 @@ def generate_source_reasoning(
             f"Авторская аналитика: «Смотрели последние игры обеих команд: колоссальная разница в скорости перехода из обороны в атаку. Фаворит разрывает на свободном пространстве. Ожидаем уверенную победу и заход «{outcome}»».",
             f"Сводка каппера: «Линия дает валуйный перевес. По нашим расчетам реальный коэффициент должен быть в районе 1.45-1.50, букмекер явно переоценил шансы оппонента. Берем «{outcome}» уверенным флэтом»."
         ]
-        return rng.choice(templates)
+        return wrap_res(rng.choice(templates))
 
     # 5. Базовый экспертный аргумент
-    return f"Обоснование прогноза: стабильная форма лидеров, высокий процент побед в текущем сезоне и тактическое преимущество в очном противостоянии. Коэффициент {odds} предлагает оптимальный баланс вероятности и доходности."
+    return wrap_res(f"Обоснование прогноза: стабильная форма лидеров, высокий процент побед в текущем сезоне и тактическое преимущество в очном противостоянии. Коэффициент {odds} предлагает оптимальный баланс вероятности и доходности.")
 
 def generate_match_tactical_analysis(
     sport: str,

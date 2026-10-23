@@ -55,6 +55,22 @@ class Match(Base):
     predictions = relationship("Prediction", back_populates="match")
     result = relationship("HistoricalResult", back_populates="match", uselist=False)
 
+    @property
+    def home_logo(self):
+        try:
+            from .logo_service import get_team_logo
+            return get_team_logo(self.home_team, self.sport_type, fast_only=True)
+        except Exception:
+            return None
+
+    @property
+    def away_logo(self):
+        try:
+            from .logo_service import get_team_logo
+            return get_team_logo(self.away_team, self.sport_type, fast_only=True)
+        except Exception:
+            return None
+
 class Prediction(Base):
     __tablename__ = "predictions"
 

@@ -2,8 +2,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, time, timedelta
-from typing import List, Dict
+from typing import List, Dict, Tuple, Optional, Any
 import re
+import os
+import json
 from thefuzz import fuzz
 from unidecode import unidecode
 
@@ -17,7 +19,7 @@ from app.analytics_engine import (
     generate_ai_insight,
     generate_cappers_consensus_reasoning
 )
-from app.logo_service import get_team_logo, get_league_country
+from app.logo_service import get_team_logo, get_league_country, translate_team_name_to_ru
 
 def format_handicap_val(val_str: str) -> str:
     """Гарантирует четкий явный знак + или - для любой форы, чтобы не было двусмысленности."""
@@ -167,7 +169,7 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
         return "Ничья (Х)"
 
     # 7. Форы (ПРОВЕРЯТЬ ДО П1/П2, чтобы "Фора 2 (-1)" не стала П2!)
-    is_handicap = any(k in out for k in ['фора', 'handicap', 'азиатская фора']) or re.search(r'\b(ф1|ф2|ah1|ah2|ах1|ах2)\b', out) or 'с форой' in out
+    is_handicap = any(k in out for k in ['фора', 'handicap', 'азиатская фора']) or re.search(r'\b(ф|ah|ах)\s*[12]\b', out) or 'с форой' in out
     if is_handicap:
         val_m = re.search(r'\(\s*([\+\-]?\d+[\.,]?\d*)\s*\)', out)
         if not val_m:
@@ -179,13 +181,13 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
 
         is_t2 = bool(
             re.search(r'(?:фора|handicap|ф|ah|ах|форой)\s*2\b', out)
-            or re.search(r'\b(ф2|ah2|ах2|гост\w*|втор\w*)\b', out)
+            or re.search(r'\b(ф\s*2|ah\s*2|ах\s*2|гост\w*|втор\w*)\b', out)
             or (away_team and is_team_mention(out, away_team))
             or '(ф2)' in out
         )
         is_t1 = bool(
             re.search(r'(?:фора|handicap|ф|ah|ах|форой)\s*1\b', out)
-            or re.search(r'\b(ф1|ah1|ах1|хозя\w*|перв\w*)(?=[^\wа-яё]|$)', out)
+            or re.search(r'\b(ф\s*1|ah\s*1|ах\s*1|хозя\w*|перв\w*)(?=[^\wа-яё]|$)', out)
             or (home_team and is_team_mention(out, home_team))
             or '(ф1)' in out
         )
@@ -233,22 +235,24 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
 
     # 10. ЧИСТАЯ Победа 2 / Гости (П2)
     if (
-        out in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды", "победа второй"]
+        out in ["away_win", "п2", "w2", "2", "победа 2", "победа2", "победа гостей", "победа второй команды", "победа второй", "п 2", "w 2"]
         or re.search(r'\b(победа\s*2|победа\s*гостей|победа\s*второй)\b', out)
         or re.search(r'\(п2\)', out)
-        or re.fullmatch(r'п2[\.\s]*', out)
-        or re.fullmatch(r'w2[\.\s]*', out)
+        or re.search(r'\bп\s*2[\.\s]*$', out)
+        or re.fullmatch(r'п\s*2[\.\s]*', out)
+        or re.fullmatch(r'w\s*2[\.\s]*', out)
         or re.fullmatch(r'2[\.\s]*', out)
     ):
         return f"Победа {away_team} (П2)" if away_team else "Победа Гостей (П2)"
 
     # 11. ЧИСТАЯ Победа 1 / Хозяева (П1)
     if (
-        out in ["home_win", "п1", "w1", "1", "победа 1", "победа1", "победа хозяев", "победа первой команды", "победа первой"]
+        out in ["home_win", "п1", "w1", "1", "победа 1", "победа1", "победа хозяев", "победа первой команды", "победа первой", "п 1", "w 1"]
         or re.search(r'\b(победа\s*1|победа\s*хозяев|победа\s*первой)\b', out)
         or re.search(r'\(п1\)', out)
-        or re.fullmatch(r'п1[\.\s]*', out)
-        or re.fullmatch(r'w1[\.\s]*', out)
+        or re.search(r'\bп\s*1[\.\s]*$', out)
+        or re.fullmatch(r'п\s*1[\.\s]*', out)
+        or re.fullmatch(r'w\s*1[\.\s]*', out)
         or re.fullmatch(r'1[\.\s]*', out)
     ):
         return f"Победа {home_team} (П1)" if home_team else "Победа Хозяев (П1)"
@@ -273,6 +277,110 @@ def normalize_outcome(outcome: str, home_team: str = "", away_team: str = "") ->
             return f"Победа {home_team} (П1)"
 
     return raw.capitalize()
+
+def get_prediction_direction(norm_outcome: str, home_team: str = "", away_team: str = "") -> str:
+    """
+    Определяет генеральное направление ставки для нахождения синергии и консенсуса экспертов:
+    - SIDE_AWAY (П2, Ф2, X2, ИТБ2)
+    - SIDE_HOME (П1, Ф1, 1X, ИТБ1)
+    - TOTAL_OVER (ТБ)
+    - TOTAL_UNDER (ТМ)
+    - BTTS_YES (ОЗ: Да)
+    - BTTS_NO (ОЗ: Нет)
+    - DRAW (Ничья)
+    """
+    out_low = (norm_outcome or "").lower()
+    
+    # Гости (Team 2) - поддержка кириллицы и латиницы
+    if any(k in out_low for k in [
+        "(п2)", "(p2)", "(ф2)", "(f2)", "(x2)", "(х2)", "итб2", "итм1", "победа 2", "победа гостей", "фора 2", "2 (ф2)"
+    ]):
+        return "SIDE_AWAY"
+
+    # Хозяева (Team 1) - поддержка кириллицы и латиницы
+    if any(k in out_low for k in [
+        "(п1)", "(p1)", "(ф1)", "(f1)", "(1x)", "(1х)", "итб1", "итм2", "победа 1", "победа хозяев", "фора 1", "1 (ф1)"
+    ]):
+        return "SIDE_HOME"
+
+    if away_team and len(away_team) > 2 and away_team.lower() in out_low and not any(k in out_low for k in ["итм", "против"]):
+        return "SIDE_AWAY"
+    if home_team and len(home_team) > 2 and home_team.lower() in out_low and not any(k in out_low for k in ["итм", "против"]):
+        return "SIDE_HOME"
+
+    if any(k in out_low for k in ["(тб", "(tb", "тотал больше", "over"]):
+        return "TOTAL_OVER"
+    if any(k in out_low for k in ["(тм", "(tm", "тотал меньше", "under"]):
+        return "TOTAL_UNDER"
+    if any(k in out_low for k in ["оз: да", "обе забьют — да", "обе забьют: да", "btts yes"]):
+        return "BTTS_YES"
+    if any(k in out_low for k in ["оз: нет", "обе забьют — нет", "обе забьют: нет", "btts no"]):
+        return "BTTS_NO"
+    if any(k in out_low for k in ["(х)", "(x)", "ничья", "draw"]):
+        return "DRAW"
+    return norm_outcome
+
+def calculate_consensus_odds(preds: List[Any], outcome: str = "") -> float:
+    """
+    Математически защищенный расчет консенсус-кэфа с фильтрацией выбросов и ошибок парсинга.
+    Исключает ситуации, когда ошибочно спарсенный кэф (например, 1.19 вместо 1.95 из-за сдвига колонок
+    или превращения 1X в П1) искажает реальный рыночный коэффициент.
+    """
+    if not preds:
+        return 1.0
+
+    valid_pairs = []
+    for p in preds:
+        raw_odd = getattr(p, 'odds', 0.0)
+        try:
+            val = float(raw_odd)
+            if val >= 1.01:
+                valid_pairs.append((val, p))
+        except (ValueError, TypeError):
+            continue
+
+    if not valid_pairs:
+        return 1.0
+
+    if len(valid_pairs) == 1:
+        return round(valid_pairs[0][0], 2)
+
+    odds_vals = [item[0] for item in valid_pairs]
+
+    # Правило 1: Фильтрация выбросов при >= 3 источниках по медиане
+    if len(odds_vals) >= 3:
+        import statistics
+        med = statistics.median(odds_vals)
+        # Отсекаем коэффициенты, отклоняющиеся от медианы более чем на 30%
+        filtered = [v for v in odds_vals if abs(v - med) / med <= 0.30]
+        if filtered:
+            return round(sum(filtered) / len(filtered), 2)
+        return round(med, 2)
+
+    # Правило 2: Два источника с сильным расхождением (отношение > 1.30, например 1.19 против 1.95)
+    o_min, o_max = min(odds_vals), max(odds_vals)
+    if (o_max / o_min) > 1.30:
+        p_min = next(p for v, p in valid_pairs if v == o_min)
+        p_max = next(p for v, p in valid_pairs if v == o_max)
+
+        reasoning_max = str(getattr(p_max, 'reasoning', '') or '')
+        has_text_confirmation = f"{o_max:.2f}" in reasoning_max or str(o_max) in reasoning_max
+
+        s_min_name = getattr(getattr(p_min, 'source', None), 'name', '') or ''
+        s_max_name = getattr(getattr(p_max, 'source', None), 'name', '') or ''
+
+        is_min_bot = any(b in s_min_name.lower() for b in ['zulu', 'bot', 'trend', 'ai'])
+        is_max_verified = any(c in s_max_name.lower() for c in ['vprognoze', 'legalbet', 'stavka', 'bookmaker', 'championat', 'oddsportal'])
+
+        # Если низкий кэф принадлежит боту или аномально низкий (<1.35) при наличии верифицированного каппера/линии (>=1.55)
+        if (is_min_bot or o_min < 1.35) and (is_max_verified or has_text_confirmation or o_max >= 1.55):
+            return round(o_max, 2)
+        elif o_max > 3.0 and o_min >= 1.50:
+            return round(o_min, 2)
+        else:
+            return round(o_max if o_max <= 2.80 else o_min, 2)
+
+    return round(sum(odds_vals) / len(odds_vals), 2)
 
 def calculate_sharp_value_score(outcome: str, odds: float, total_weight: float, num_sources: int, high_tier_count: int = 0) -> tuple[float, float, str]:
     """
@@ -300,14 +408,14 @@ def calculate_sharp_value_score(outcome: str, odds: float, total_weight: float, 
     ev_percent = round(ev * 100.0, 1)
 
     # 1. Множитель диапазона коэффициентов (Line Efficiency & Variance Optimization)
-    if odds < 1.30:
-        odds_mult = 0.50   # Катастрофически низкая валуйность, высокий риск слива банка при 1 осечке
-    elif 1.30 <= odds < 1.45:
-        odds_mult = 0.75   # Невыгодная маржа
-    elif 1.45 <= odds < 1.65:
-        odds_mult = 1.00   # Норма
+    if odds < 1.40:
+        odds_mult = 0.15   # Жесткий штраф за маржинальную яму БК
+    elif 1.40 <= odds < 1.55:
+        odds_mult = 0.40   # Невыгодная маржа, не для профитных топов
+    elif 1.55 <= odds < 1.65:
+        odds_mult = 1.05   # Допустимый профитный порог
     elif 1.65 <= odds <= 2.45:
-        odds_mult = 1.35   # 🌟 ЗОЛОТАЯ ЗОНА ПРОФЕССИОНАЛЬНОГО ВАЛУЯ (П1 @ 2.10, ТБ 2.5 @ 1.95, Ф1(0) @ 1.75)
+        odds_mult = 1.40   # 🌟 ЗОЛОТАЯ ЗОНА ПРОФЕССИОНАЛЬНОГО ВАЛУЯ (П1 @ 2.10, ТБ 2.5 @ 1.95, Ф1(0) @ 1.75)
     elif 2.46 <= odds <= 3.20:
         odds_mult = 1.20   # Отличный валуйный андердог или равный матч
     elif 3.21 <= odds <= 4.20:
@@ -371,40 +479,106 @@ def calculate_passability_multiplier(outcome: str, odds: float) -> float:
         return 1.15
     return 1.0
 
-def get_generic_sport(s: str) -> str:
+def get_generic_sport(s: str, league: str = None, home_team: str = None, away_team: str = None) -> str:
     s_low = (s or '').lower().strip()
-    if any(x in s_low for x in ["mma", "ufc", "bellator", "boxing", "martial"]):
-        return "MMA"
-    if any(x in s_low for x in ["tennis", "atp", "wta", "itf"]):
-        return "Tennis"
-    if any(x in s_low for x in ["basketball", "nba", "euroleague", "vtb", "acb", "nbl"]):
-        return "Basketball"
-    if "veikkausliiga" not in s_low and any(x in s_low for x in ["hockey", "nhl", "khl", "ahl", "shl", "liiga", "mestis", "vhl"]):
-        return "Hockey"
-    if any(x in s_low for x in ["nfl", "ncaaf", "american football", "afl"]):
-        return "American Football"
-    if any(x in s_low for x in ["esport", "dota", "cs:go", "cs2", "counter-strike", "league of legends", "valorant"]):
-        return "Esports"
-    if any(x in s_low for x in ["baseball", "mlb", "kbo", "npb"]):
-        return "Baseball"
-    if any(x in s_low for x in ["cricket", "twenty20", "one day international", "t20", "test matches"]):
-        return "Cricket"
+    extra_text = f"{league or ''} {home_team or ''} {away_team or ''}".lower()
+
+    # 1. Если в названии команд или лиге есть явные футбольные атрибуты:
+    if any(k in extra_text for k in [
+        "угл ", "угл.", "фолы", "офсайд", "сосьедад", "альмерия", "дженоа", "бундеслига",
+        "серия а", "ла лига", "апл", "рпл", "сегунда", "uefa", "лига чемпионов", "лига 1"
+    ]):
+        return "Football"
+
+    # 2. Футбол по названию лиги или спорта
     if any(x in s_low for x in [
-        "football", "soccer", "uefa", "champions league", "europa league", "conference league",
+        "football", "soccer", "футбол", "uefa", "champions league", "europa league", "conference league",
         "la liga", "epl", "premier", "serie", "série", "bundesliga", "ligue", "eredivisie", "superliga",
         "ekstraklasa", "eliteserien", "allsvenskan", "championship", "league 1", "league 2", "3. liga",
         "copa", "sudamericana", "libertadores", "liga mx", "mls", "saudi", "primeira",
         "primera", "super league", "superleague", "superettan", "veikkausliiga", "j league", "k league",
-        "division", "div", "ireland", "scotland"
+        "division", "div", "ireland", "scotland", "сегунда", "рпл", "апл"
     ]):
         return "Football"
-    return "Other"
+
+    # 3. MMA / Бокс (строгие термины)
+    if any(x in s_low for x in ["mma", "ufc", "bellator", "бокс", "boxing", "martial"]):
+        return "MMA"
+
+    # 4. Теннис
+    if any(x in s_low for x in ["tennis", "теннис", "atp", "wta", "itf"]):
+        return "Tennis"
+
+    # 5. Баскетбол
+    if any(x in s_low for x in ["basketball", "баскетбол", "nba", "нба", "euroleague", "евролига", "vtb", "втб", "acb", "nbl"]):
+        return "Basketball"
+
+    # 6. Хоккей
+    if "veikkausliiga" not in s_low and any(x in s_low for x in ["hockey", "хоккей", "nhl", "нхл", "khl", "кхл", "ahl", "ахл", "shl", "шхл", "liiga", "mestis", "vhl", "вхл", "мхл"]):
+        return "Hockey"
+
+    # 7. Американский футбол
+    if any(x in s_low for x in ["nfl", "нфл", "ncaaf", "american football", "амер. футбол", "afl"]):
+        return "American Football"
+
+    # 8. Киберспорт
+    if any(x in s_low for x in ["esport", "киберспорт", "dota", "cs:go", "cs2", "counter-strike", "league of legends", "valorant"]):
+        return "Esports"
+
+    # 9. Бейсбол
+    if any(x in s_low for x in ["baseball", "бейсбол", "mlb", "kbo", "npb"]):
+        return "Baseball"
+
+    # 10. Крикет
+    if any(x in s_low for x in ["cricket", "крикет", "twenty20", "one day international", "t20", "test matches"]):
+        return "Cricket"
+
+DAILY_LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "daily_top3_lock.json")
+
+def get_daily_top3_lock(date_str: str) -> Optional[List[int]]:
+    try:
+        import json as _json
+        if os.path.exists(DAILY_LOCK_FILE):
+            with open(DAILY_LOCK_FILE, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+                return data.get(date_str)
+    except Exception:
+        pass
+    return None
+
+def save_daily_top3_lock(date_str: str, match_ids: List[int]):
+    try:
+        import json as _json
+        data = {}
+        if os.path.exists(DAILY_LOCK_FILE):
+            try:
+                with open(DAILY_LOCK_FILE, "r", encoding="utf-8") as f:
+                    data = _json.load(f)
+            except Exception:
+                data = {}
+        data[date_str] = match_ids
+        with open(DAILY_LOCK_FILE, "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+_daily_top_bets_cache = {}
+_daily_top_bets_cache_ttl = 60  # 60 seconds TTL
 
 async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None, date_str: str = None, status_filter: str = None) -> List[TopBetResponse]:
     """
     Отбирает матчи на выбранную дату и агрегирует прогнозы реальных капперов.
     Поддерживает фильтрацию по статусу: 'upcoming', 'finished' (архив) или все.
+    Использует 30-секундный кэш в оперативной памяти для молниеносного ответа API.
     """
+    import time as _t
+    cache_key = f"{sport_type}_{date_str}_{status_filter}"
+    now_ts = _t.time()
+    if cache_key in _daily_top_bets_cache:
+        c_ts, c_res = _daily_top_bets_cache[cache_key]
+        if now_ts - c_ts < _daily_top_bets_cache_ttl:
+            return c_res
+
     moscow_tz = timezone(timedelta(hours=3))
     now_moscow = datetime.now(moscow_tz).replace(tzinfo=None)
     
@@ -428,27 +602,33 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         else:
             target_date = now_moscow
             start_filter = datetime.combine(target_date.date(), time.min)
-            end_of_day = now_moscow + timedelta(days=365) # Если ALL, берем всё будущее
+            end_of_day = datetime.combine(target_date.date(), time.max) if date_str != "ALL" else now_moscow + timedelta(days=365)
             
-        # Скрываем матчи, которые уже начались, если смотрим текущий день или ALL (если не запрошен архив)
-        if (date_str == "ALL" or target_date.date() == now_moscow.date()) and status_filter != "finished":
-            start_filter = now_moscow
-
-        # Получаем матчи с прогнозами и источниками
+        # ДЕНЬ ВСЕГДА ОХВАТЫВАЕТ ВСЕ МАТЧИ С 00:00:00 ДО 23:59:59 МСК!
+        # Матчи текущего дня НЕ скрываются при наступлении времени игры,
+        # чтобы главная Ставка Дня не исчезала и не менялась в течение дня!
         stmt = select(Match).options(
             selectinload(Match.predictions).selectinload(Prediction.source)
         ).where(
             Match.match_date >= start_filter,
             Match.match_date <= end_of_day
         )
-        if status_filter == "upcoming":
-            stmt = stmt.where(Match.status == MatchStatus.upcoming)
 
     result = await session.execute(stmt)
     matches = result.scalars().all()
 
+    # Загружаем реальную статистику проходимости источников в разрезе видов спорта
+    from .settlement_service import get_source_sport_stats, SPORT_TRANSLATIONS_RU
+    try:
+        source_stats_cache = await get_source_sport_stats(session)
+        by_source_sport = source_stats_cache.get("by_source_sport", {})
+        by_source_overall = source_stats_cache.get("by_source_overall", {})
+    except Exception as e:
+        by_source_sport = {}
+        by_source_overall = {}
+
     if sport_type and sport_type != 'All':
-        matches = [m for m in matches if get_generic_sport(m.sport_type) == sport_type or (m.sport_type and m.sport_type.lower() == sport_type.lower())]
+        matches = [m for m in matches if get_generic_sport(m.sport_type, m.league, m.home_team, m.away_team) == sport_type or (m.sport_type and m.sport_type.lower() == sport_type.lower())]
 
     top_bets = []
 
@@ -456,11 +636,50 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         if not match.predictions:
             continue
 
-        # Группируем прогнозы по исходам с нормализацией текста
+        gen_sport = get_generic_sport(match.sport_type)
+        sport_ru = SPORT_TRANSLATIONS_RU.get(gen_sport, "спорте")
+
+        def get_source_weight_and_label(p: Prediction) -> Tuple[float, str, Optional[float], str]:
+            """
+            Возвращает (dynamic_weight, label, winrate, tier) с привязкой к виду спорта.
+            """
+            if not p.source:
+                return 1.0, "Эксперт", None, "neutral"
+
+            s_id = p.source_id
+            # 1. Проверяем статистику источника именно в текущем виде спорта
+            sport_stat = by_source_sport.get((s_id, gen_sport))
+            if sport_stat and sport_stat["total_bets"] >= 2:
+                w = sport_stat["dynamic_weight"]
+                wr = sport_stat["winrate_pct"]
+                tier = sport_stat["tier"]
+                tier_badge = " • Шарп" if tier in ["elite_sharp", "sharp"] else (" • Понижен" if tier == "poor" else "")
+                label = f"{p.source.name} ({wr}% в {sport_ru} • Вес: {w}{tier_badge})"
+                return w, label, wr, tier
+
+            # 2. Если в данном виде спорта выборка мала, берем общую статистику каппера
+            all_stat = by_source_overall.get(s_id)
+            if all_stat and all_stat["total_bets"] >= 3:
+                w = all_stat["dynamic_weight"]
+                wr = all_stat["winrate_pct"]
+                tier = all_stat["tier"]
+                tier_badge = " • Шарп" if tier in ["elite_sharp", "sharp"] else (" • Понижен" if tier == "poor" else "")
+                label = f"{p.source.name} (Общ. {wr}% • Вес: {w}{tier_badge})"
+                return w, label, wr, tier
+
+            # 3. Дефолтный базовый вес
+            base_w = p.source.weight if (p.source and p.source.weight) else 1.0
+            label = f"{p.source.name} (Рейтинг: {round(base_w, 1)})"
+            return base_w, label, None, "neutral"
+
+        # Группируем прогнозы по исходам с нормализацией текста и генеральным направлениям (синергия экспертов)
         outcomes_map: Dict[str, List[Prediction]] = {}
+        direction_map: Dict[str, List[Prediction]] = {}
         for pred in match.predictions:
             norm_outcome = normalize_outcome(pred.predicted_outcome, match.home_team, match.away_team)
             outcomes_map.setdefault(norm_outcome, []).append(pred)
+            d_key = get_prediction_direction(norm_outcome, match.home_team, match.away_team)
+            direction_map.setdefault(d_key, []).append(pred)
 
         best_outcome = None
         best_score = -1.0
@@ -469,65 +688,61 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
         best_value_badge = None
         best_ev_percent = None
 
-        # 1. Если ИИ ранее выбрал умную ставку среди прогнозов капперов (chosen_outcome)
-        if match.chosen_outcome:
-            norm_chosen = normalize_outcome(match.chosen_outcome, match.home_team, match.away_team)
-            if norm_chosen in outcomes_map:
-                preds = outcomes_map[norm_chosen]
-                total_odds = sum(p.odds for p in preds)
-                avg_odds = total_odds / len(preds)
-                raw_score = sum((p.source.weight if p.source and p.source.weight else 1.0) for p in preds)
-                high_tier = sum(1 for p in preds if p.source and p.source.weight >= 3.0)
-                final_score, ev_p, v_badge = calculate_sharp_value_score(norm_chosen, avg_odds, raw_score, len(preds), high_tier)
-                best_score = max(final_score, 75.0)
-                best_outcome = norm_chosen
-                best_avg_odds = avg_odds
-                best_value_badge = v_badge
-                best_ev_percent = ev_p
-                best_sources = [f"{p.source.name} (Рейтинг: {round(p.source.weight, 1)})" for p in preds if p.source]
-            else:
-                best_outcome = norm_chosen
-                best_avg_odds = sum(p.odds for p in match.predictions) / len(match.predictions)
-                best_score = 88.0
-                best_value_badge = "🔥 ИИ Выбор (+12.5% EV)"
-                best_ev_percent = 12.5
-                best_sources = [f"{p.source.name} (Рейтинг: {round(p.source.weight, 1)})" for p in match.predictions if p.source]
+        # Выбираем математически лучший исход по весам экспертов, синергии направления и валуйности (+EV)
+        for outcome, preds in outcomes_map.items():
+            d_key = get_prediction_direction(outcome, match.home_team, match.away_team)
+            allied_preds = direction_map.get(d_key, preds)
 
-        # 2. Если chosen_outcome нет, выбираем математически лучший исход по весам, валуйности (+EV) и проходимости
-        if not best_outcome:
-            for outcome, preds in outcomes_map.items():
-                raw_score = 0.0
-                total_odds = 0.0
-                supporting_sources = []
-                high_tier_cappers_count = 0
+            # Прямой вес конкретного исхода
+            direct_weight = 0.0
+            total_odds = 0.0
+            direct_sources = []
+            high_tier_cappers_count = 0
 
-                for p in preds:
-                    source_weight = p.source.weight if p.source and p.source.weight else 1.0
-                    raw_score += source_weight
-                    total_odds += p.odds
-                    if p.source:
-                        source_label = f"{p.source.name} (Рейтинг: {round(source_weight, 1)})"
-                        supporting_sources.append(source_label)
-                    if source_weight >= 3.0:
+            for p in preds:
+                w, lbl, wr, tier = get_source_weight_and_label(p)
+                direct_weight += w
+                total_odds += p.odds
+                direct_sources.append(lbl)
+                if w >= 2.2:
+                    high_tier_cappers_count += 1
+
+            # Синергия от союзных прогнозов того же направления (например, Фора (0) и Фора (+2) в поддержку П2)
+            allied_bonus_weight = 0.0
+            allied_sources = []
+            for ap in allied_preds:
+                if ap not in preds:
+                    aw, albl, awr, atier = get_source_weight_and_label(ap)
+                    allied_bonus_weight += aw * 0.6  # 60% веса союзных мнений переходит в силу направления
+                    allied_sources.append(albl)
+                    if aw >= 2.2:
                         high_tier_cappers_count += 1
 
-                avg_odds = total_odds / len(preds)
-                final_score, ev_p, v_badge = calculate_sharp_value_score(outcome, avg_odds, raw_score, len(preds), high_tier_cappers_count)
+            total_effective_weight = direct_weight + allied_bonus_weight
+            avg_odds = calculate_consensus_odds(preds, outcome)
 
-                if final_score > best_score:
-                    best_score = final_score
-                    best_outcome = outcome
-                    best_avg_odds = avg_odds
-                    best_sources = supporting_sources
-                    best_value_badge = v_badge
-                    best_ev_percent = ev_p
+            final_score, ev_p, v_badge = calculate_sharp_value_score(
+                outcome, 
+                avg_odds, 
+                total_effective_weight, 
+                len(allied_preds), 
+                high_tier_cappers_count
+            )
+
+            if final_score > best_score:
+                best_score = final_score
+                best_outcome = outcome
+                best_avg_odds = avg_odds
+                best_sources = direct_sources + allied_sources
+                best_value_badge = v_badge
+                best_ev_percent = ev_p
 
         # Собираем подробный список всех мнений капперов по этому матчу
         detailed_preds = []
         for p in match.predictions:
             s_name = p.source.name if p.source else "Эксперт"
             s_type = p.source.source_type.value if (p.source and hasattr(p.source.source_type, 'value')) else (str(p.source.source_type) if p.source else "site")
-            s_weight = round(p.source.weight, 1) if (p.source and p.source.weight) else 1.0
+            s_weight, s_label, s_wr, s_tier = get_source_weight_and_label(p)
             
             # Единый стандарт исхода для всех капперов и источников
             norm_p_outcome = normalize_outcome(p.predicted_outcome, match.home_team, match.away_team)
@@ -543,7 +758,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                     away_team=match.away_team,
                     outcome=norm_p_outcome,
                     odds=p.odds,
-                    source_weight=s_weight
+                    source_weight=s_weight,
+                    winrate=s_wr
                 )
             
             # Исход ставки источника (если матч завершен)
@@ -556,14 +772,25 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 if eval_st:
                     p_status_val = eval_st.value
 
+            # Защита от искажения кэфов у ботов в модальном окне:
+            displayed_odd = round(p.odds, 2)
+            if best_outcome and norm_p_outcome == best_outcome and best_avg_odds >= 1.55:
+                if displayed_odd < 1.35 and any(b in s_name.lower() for b in ['zulu', 'bot', 'trend', 'ai']):
+                    displayed_odd = round(best_avg_odds, 2)
+
+            # Компактный reasoning для молниеносной передачи по сети (до 220 символов)
+            short_reasoning = (p_reasoning[:220] + '...') if p_reasoning and len(p_reasoning) > 220 else p_reasoning
+
             detailed_preds.append(TopBetPredictionDetail(
                 source_name=s_name,
                 source_type=s_type,
                 predicted_outcome=norm_p_outcome,
-                odds=round(p.odds, 2),
+                odds=displayed_odd,
                 confidence_score=p.confidence_score,
-                source_weight=s_weight,
-                reasoning=p_reasoning,
+                source_weight=round(s_weight, 2),
+                sport_winrate=round(s_wr, 1) if s_wr is not None else None,
+                tier=s_tier,
+                reasoning=short_reasoning,
                 status=p_status_val
             ))
 
@@ -604,8 +831,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
             )
 
             # Эмблемы команд и флаг страны
-            h_logo = get_team_logo(match.home_team, match.sport_type)
-            a_logo = get_team_logo(match.away_team, match.sport_type)
+            h_logo = get_team_logo(match.home_team, match.sport_type, fast_only=True)
+            a_logo = get_team_logo(match.away_team, match.sport_type, fast_only=True)
             country_info = get_league_country(match.league, match.sport_type)
 
             # Исход консенсуса
@@ -616,19 +843,39 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 if eval_cons:
                     bet_res_val = eval_cons.value
             
-            m_status_str = match.status.value if hasattr(match.status, 'value') else str(match.status)
+            # Динамический статус матча: finished, live или upcoming
+            # Матч считается ЗАВЕРШЁННЫМ только если в БД реально есть финальный счёт или подтвержденный результат!
+            has_final_score = (match.final_score_home is not None and match.final_score_away is not None)
+            if has_final_score or (match.status == MatchStatus.finished and bet_res_val is not None):
+                m_status_str = "finished"
+            elif match.match_date:
+                time_diff_sec = (now_moscow - match.match_date).total_seconds()
+                if 0 <= time_diff_sec <= 135 * 60:
+                    m_status_str = "live"
+                else:
+                    m_status_str = "upcoming"
+            else:
+                m_status_str = "upcoming"
+
+            # Фильтр профитности: в Топ-ставки (Кандидаты дня) попадают ТОЛЬКО исходы с кэфом от 1.55!
+            if status_filter != "finished" and round(best_avg_odds, 2) < 1.55:
+                continue
+
+            gen_sport = get_generic_sport(match.sport_type, match.league, match.home_team, match.away_team)
 
             top_bets.append(TopBetResponse(
                 match_id=match.id,
-                match_name=f"{match.home_team} vs {match.away_team}",
+                match_name=f"{translate_team_name_to_ru(match.home_team)} vs {translate_team_name_to_ru(match.away_team)}",
                 match_date=match.match_date,
-                league=match.league,
-                sport_type=match.sport_type,
+                league=country_info.get("league_ru") or match.league,
+                sport_type=gen_sport,
                 recommended_outcome=best_outcome,
                 average_odds=round(best_avg_odds, 2),
                 confidence_score=round(best_score, 1),
                 supporting_sources=best_sources,
-                is_bet_of_the_day=match.is_bet_of_the_day or False,
+                is_bet_of_the_day=False,
+                daily_rank=None,
+                slot_label=None,
                 ai_insight=ai_in,
                 value_badge=best_value_badge,
                 ev_percent=best_ev_percent,
@@ -636,8 +883,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 tactical_analysis=tactical,
                 key_factors=factors,
                 h2h_summary=h2h,
-                home_team=match.home_team,
-                away_team=match.away_team,
+                home_team=translate_team_name_to_ru(match.home_team),
+                away_team=translate_team_name_to_ru(match.away_team),
                 home_logo=h_logo,
                 away_logo=a_logo,
                 country_name=country_info.get("name"),
@@ -650,24 +897,70 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 all_predictions=detailed_preds
             ))
 
-    # Сортируем от самых уверенных ставок к менее уверенным
+    # 1. Сортируем всех кандидатов от самых уверенных ставок к менее уверенным
     top_bets.sort(key=lambda x: x.confidence_score, reverse=True)
 
-    # Определяем Ставку Дня: ровно 1 лучшая ставка на каждый базовый вид спорта
-    seen_botd_sports = set()
-    for bet in top_bets:
-        gen = get_generic_sport(bet.sport_type)
-        if bet.is_bet_of_the_day:
-            if gen not in seen_botd_sports:
-                seen_botd_sports.add(gen)
+    # 2. Фиксация Топ-3 Ставок Дня на текущую дату
+    # Чтобы главная Ставка Дня и Топ-3 оставались зафиксированными на весь день,
+    # не менялись и не исчезали после финального свистка!
+    target_date_str = (target_date if (date_str and date_str != "ALL") else now_moscow).strftime("%Y-%m-%d")
+    locked_ids = get_daily_top3_lock(target_date_str)
+    if not locked_ids and status_filter != "finished":
+        # Если для даты ещё нет фиксации, берём первые 3 ставки с кэфом >= 1.55
+        qualifying = [b for b in top_bets if (b.average_odds or 0.0) >= 1.55]
+        if qualifying:
+            locked_ids = [b.match_id for b in qualifying[:3]]
+            save_daily_top3_lock(target_date_str, locked_ids)
+
+    # Если для даты зафиксированы ID матчей, строго выстраиваем их в Топ-3:
+    if locked_ids:
+        by_id = {b.match_id: b for b in top_bets}
+        top3_bets = []
+        for m_id in locked_ids:
+            if m_id in by_id:
+                top3_bets.append(by_id[m_id])
+
+        locked_set = set(locked_ids)
+        remaining_bets = [b for b in top_bets if b.match_id not in locked_set]
+
+        # 1-е место: СТРОГО Ставка Дня
+        for idx, bet in enumerate(top3_bets):
+            bet.daily_rank = idx + 1
+            if idx == 0:
+                bet.is_bet_of_the_day = True
+                bet.slot_label = "Главная Ставка Дня"
+            elif idx == 1:
+                bet.is_bet_of_the_day = False
+                bet.slot_label = "Топ-2 Дня"
+            elif idx == 2:
+                bet.is_bet_of_the_day = False
+                bet.slot_label = "Топ-3 Дня"
+
+        # Остальные кандидаты
+        for idx, bet in enumerate(remaining_bets):
+            bet.daily_rank = len(top3_bets) + idx + 1
+            bet.is_bet_of_the_day = False
+            bet.slot_label = None
+
+        top_bets = top3_bets + remaining_bets
+    else:
+        # Резервный расчет
+        botd_assigned = False
+        for idx, bet in enumerate(top_bets):
+            bet.daily_rank = idx + 1
+            if not botd_assigned and (bet.average_odds or 0.0) >= 1.55:
+                bet.is_bet_of_the_day = True
+                bet.slot_label = "Главная Ставка Дня"
+                botd_assigned = True
+            elif idx == 1 or (not bet.is_bet_of_the_day and idx == 0):
+                bet.is_bet_of_the_day = False
+                bet.slot_label = "Топ-2 Дня"
+            elif idx == 2:
+                bet.is_bet_of_the_day = False
+                bet.slot_label = "Топ-3 Дня"
             else:
                 bet.is_bet_of_the_day = False
+                bet.slot_label = None
 
-    # Для тех видов спорта, где флага еще не было, отмечаем самую уверенную ставку
-    for bet in top_bets:
-        gen = get_generic_sport(bet.sport_type)
-        if gen not in seen_botd_sports:
-            bet.is_bet_of_the_day = True
-            seen_botd_sports.add(gen)
-
+    _daily_top_bets_cache[cache_key] = (now_ts, top_bets)
     return top_bets

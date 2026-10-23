@@ -60,18 +60,47 @@ class BypassedBettingParser:
                             teams = cols[1].get_text(strip=True)
                             if " - " not in teams:
                                 continue
-                                
-                            pred_code = cols[9].get_text(strip=True)
+
+                            # Очищаем префикс текущей минуты (например, "-52'1X" -> "1X", "-38'1" -> "1")
+                            pred_code_raw = cols[9].get_text(strip=True) if len(cols) > 9 else ""
+                            pred_code = re.sub(r'^[-\d\']+', '', pred_code_raw).strip()
+
+                            o1_str = cols[12].get_text(strip=True).replace(',', '.') if len(cols) > 12 else "1.0"
+                            ox_str = cols[13].get_text(strip=True).replace(',', '.') if len(cols) > 13 else "1.0"
+                            o2_str = cols[14].get_text(strip=True).replace(',', '.') if len(cols) > 14 else "1.0"
+
+                            try:
+                                o1 = float(o1_str)
+                            except ValueError:
+                                o1 = 1.0
+                            try:
+                                ox = float(ox_str)
+                            except ValueError:
+                                ox = 1.0
+                            try:
+                                o2 = float(o2_str)
+                            except ValueError:
+                                o2 = 1.0
+
                             if pred_code == "1":
                                 outcome = "Победа Хозяев (П1)"
-                                odds = float(cols[12].get_text(strip=True))
+                                odds = o1
                             elif pred_code == "2":
                                 outcome = "Победа Гостей (П2)"
-                                odds = float(cols[14].get_text(strip=True))
+                                odds = o2
                             elif pred_code == "X":
                                 outcome = "Ничья (Х)"
-                                odds = float(cols[13].get_text(strip=True))
+                                odds = ox
+                            elif pred_code in ["1X", "X1"]:
+                                outcome = "1X (Хозяева не проиграют)"
+                                odds = round(1.0 / (1.0 / o1 + 1.0 / ox), 2) if (o1 > 1.0 and ox > 1.0) else 1.25
+                            elif pred_code in ["X2", "2X"]:
+                                outcome = "X2 (Гости не проиграют)"
+                                odds = round(1.0 / (1.0 / o2 + 1.0 / ox), 2) if (o2 > 1.0 and ox > 1.0) else 1.25
                             else:
+                                continue
+
+                            if odds < 1.05 or odds > 30.0:
                                 continue
 
                             extracted_data.append({
@@ -81,7 +110,7 @@ class BypassedBettingParser:
                                 "teams_text": teams,
                                 "outcome": outcome,
                                 "odds": odds,
-                                "target_date": dt # Сохраняем дату матча
+                                "target_date": dt
                             })
                         except Exception:
                             continue
@@ -91,19 +120,26 @@ class BypassedBettingParser:
         logger.info(f"[Zulubet] Найдено матчей за 3 дня: {len(extracted_data)}")
         return extracted_data
 
+def clean_team_name_for_match(name: str) -> str:
+    s = unidecode(name).lower()
+    for noise in ['fc', 'fk', 'tc', 'sc', 'cf', 'bc', 'jk', 'фк', 'бк']:
+        s = re.sub(rf'\b{noise}\b', '', s)
+    return ' '.join(s.split())
+
 async def run_playwright_scraper():
-    """Главная функция для оркестрации парсера"""
-    logger.info("=== ЗАПУСК WEB ПАРСЕРА (Bypass Mode) ===")
+    """Главная функция для оркестрации парсера Zulubet"""
+    logger.info("=== ЗАПУСК WEB ПАРСЕРА (Zulubet AI Matcher) ===")
     async with AsyncSessionLocal() as session:
         parser = BypassedBettingParser(session)
         
         all_predictions = await parser.parse_zulubet()
-
-        # Обработка и сохранение в БД
         added_preds = 0
         
+        # Получаем все актуальные футбольные матчи
+        m_stmt = select(Match).where(Match.status == MatchStatus.upcoming)
+        active_matches = (await session.execute(m_stmt)).scalars().all()
+
         for item in all_predictions:
-            # Регистрируем источник
             c_stmt = select(Source).where(Source.name == item["capper"])
             capper_source = (await session.execute(c_stmt)).scalar_one_or_none()
             new_weight = calculate_capper_weight(3.0, item["roi"], 60.0, 1000)
@@ -125,41 +161,48 @@ async def run_playwright_scraper():
             if len(teams) == 2:
                 home, away = teams[0].strip(), teams[1].strip()
             else:
-                home, away = item["teams_text"], "Unknown"
+                continue
 
-            eng_home = unidecode(home.lower())
-            eng_away = unidecode(away.lower())
+            eng_home = clean_team_name_for_match(home)
+            eng_away = clean_team_name_for_match(away)
+            target_date = item.get("target_date")
 
-            m_stmt = select(Match).where(Match.status == MatchStatus.upcoming)
-            active_matches = (await session.execute(m_stmt)).scalars().all()
-            
             best_match = None
             highest_score = 0
+
             for match in active_matches:
-                db_home = unidecode(match.home_team.lower())
-                db_away = unidecode(match.away_team.lower())
-                
-                score_h = fuzz.partial_ratio(eng_home, db_home)
-                score_a = fuzz.partial_ratio(eng_away, db_away)
-                avg = (score_h + score_a) / 2
-                
-                if avg > 70 and avg > highest_score:
-                    highest_score = avg
-                    best_match = match
+                # 1. Проверка вида спорта: Zulubet парсит ИСКЛЮЧИТЕЛЬНО футбол!
+                m_sport = str(match.sport_type or "").lower()
+                if m_sport and not any(s in m_sport for s in ["foot", "socc", "европ", "uefa", "лига", "league", "fifa"]):
+                    continue
+
+                # 2. Проверка даты: матч не может отстоять от спарсенной даты Zulubet более чем на 36 часов!
+                if match.match_date and target_date:
+                    try:
+                        m_dt = match.match_date.replace(tzinfo=None) if hasattr(match.match_date, 'replace') else match.match_date
+                        t_dt = target_date.replace(tzinfo=None) if hasattr(target_date, 'replace') else target_date
+                        diff_hours = abs((m_dt - t_dt).total_seconds()) / 3600.0
+                        if diff_hours > 36.0:
+                            continue
+                    except Exception:
+                        pass
+
+                db_home = clean_team_name_for_match(match.home_team)
+                db_away = clean_team_name_for_match(match.away_team)
+
+                # 3. Строгое сопоставление по токенам: ОБЕ команды обязаны совпасть с порогом >= 70!
+                score_h = fuzz.token_set_ratio(eng_home, db_home)
+                score_a = fuzz.token_set_ratio(eng_away, db_away)
+
+                if score_h >= 70 and score_a >= 70:
+                    avg = (score_h + score_a) / 2.0
+                    if avg >= 78 and avg > highest_score:
+                        highest_score = avg
+                        best_match = match
 
             if not best_match:
-                match_date = item.get("target_date", datetime.now(timezone.utc))
-                best_match = Match(
-                    sport_type="Football",
-                    league="Zulubet Line",
-                    home_team=home,
-                    away_team=away,
-                    match_date=match_date,
-                    status=MatchStatus.upcoming
-                )
-                session.add(best_match)
-                await session.flush()
-                logger.info(f"[Web Scraper] Создан новый матч: {home} vs {away}")
+                # Не создаем безымянные мусорные матчи 'Zulubet Line' без турниров и логотипов!
+                continue
 
             pred_stmt = select(Prediction).where(
                 Prediction.match_id == best_match.id,
@@ -167,7 +210,12 @@ async def run_playwright_scraper():
             )
             existing_pred = (await session.execute(pred_stmt)).scalar_one_or_none()
             
-            if not existing_pred:
+            if existing_pred:
+                # Обновляем старый прогноз свежими актуальными данными с сайта
+                existing_pred.predicted_outcome = item["outcome"]
+                existing_pred.odds = item["odds"]
+                existing_pred.created_at = datetime.utcnow()
+            else:
                 prediction = Prediction(
                     match_id=best_match.id,
                     source_id=capper_source.id,
@@ -179,5 +227,5 @@ async def run_playwright_scraper():
                 added_preds += 1
                 
         await session.commit()
-        logger.info(f"Web парсер завершил работу. Интегрировано прогнозов: {added_preds}")
+        logger.info(f"Zulubet парсер завершил работу. Интегрировано/обновлено прогнозов: {added_preds}")
         return added_preds

@@ -4,7 +4,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== '
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 25000,
 });
 
 export const getTopBets = async (sportType = null, date = null, statusFilter = null, onlyBetOfTheDay = false) => {
@@ -35,9 +35,13 @@ export const getTodayMatches = async (sportType = null, date = null) => {
   }
 };
 
-export const getPerformanceStats = async () => {
+export const getPerformanceStats = async (sportType = null) => {
   try {
-    const response = await api.get('/stats/overview');
+    const params = {};
+    if (sportType && sportType !== 'All') {
+      params.sport = sportType;
+    }
+    const response = await api.get('/stats/overview', { params });
     return response.data;
   } catch (error) {
     console.error("Error fetching performance stats:", error);
@@ -45,10 +49,13 @@ export const getPerformanceStats = async () => {
   }
 };
 
-export const getRecentResults = async (sportType = null) => {
+export const getRecentResults = async (sportType = null, date = null, category = null, outcomeFilter = null) => {
   try {
     const params = {};
     if (sportType && sportType !== 'All') params.sport_type = sportType;
+    if (date && date !== 'ALL') params.date = date;
+    if (category && category !== 'all') params.category = category;
+    if (outcomeFilter && outcomeFilter !== 'all') params.outcome_filter = outcomeFilter;
     const response = await api.get('/results/recent', { params });
     return response.data;
   } catch (error) {
@@ -56,6 +63,31 @@ export const getRecentResults = async (sportType = null) => {
     return [];
   }
 };
+
+export const getArchiveSummary = async (sportType = null) => {
+  try {
+    const params = {};
+    if (sportType && sportType !== 'All') params.sport = sportType;
+    const response = await api.get('/archive/summary', { params });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching archive summary:", error);
+    return null;
+  }
+};
+
+export const getMonthlyPerformance = async (month = null, mode = 'botd') => {
+  try {
+    const params = { mode };
+    if (month) params.month = month;
+    const response = await api.get('/stats/monthly-performance', { params });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching monthly performance:", error);
+    return null;
+  }
+};
+
 
 export const syncMatchResults = async () => {
   try {
@@ -173,5 +205,26 @@ export const logoutUser = async () => {
     localStorage.removeItem('auth_user');
   }
 };
+
+export const getRobobetPredictions = async (force = false) => {
+  try {
+    const response = await api.get('/robobet', { params: { force } });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching robobet predictions:", error);
+    return { matches: [], bet_of_the_day: null, total: 0 };
+  }
+};
+
+export const refreshRobobetPredictions = async () => {
+  try {
+    const response = await api.post('/robobet/refresh');
+    return response.data;
+  } catch (error) {
+    console.error("Error refreshing robobet:", error);
+    throw error;
+  }
+};
+
 
 

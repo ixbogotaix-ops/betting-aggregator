@@ -3,8 +3,9 @@ import {
   X, Target, Shield, Sparkles, Brain, TrendingUp, Users, 
   MessageSquare, Flame, BookOpen, Swords, BarChart3, CheckCircle2 
 } from 'lucide-react';
-import { getSportDisplay, formatOutcome } from './TopBetCard';
+import { getSportDisplay, formatOutcome, formatLeagueDisplay } from './TopBetCard';
 import TeamBadge from './TeamBadge';
+import { toRussianTeam, toRussianLeague } from '../utils/russianNames';
 
 const getRussianSport = (sport) => {
   const s = (sport || '').toLowerCase();
@@ -60,9 +61,12 @@ const MatchDetailModal = ({ bet, onClose }) => {
   const [activeTab, setActiveTab] = useState('sources'); // 'sources', 'tactics', 'ai'
   const mskTime = formatMoscowTime(bet.match_date);
 
-  const [homeTeam, awayTeam] = bet.match_name.includes(' vs ')
+  const [rawHome, rawAway] = bet.match_name.includes(' vs ')
     ? bet.match_name.split(' vs ')
     : bet.match_name.split(' - ');
+  const homeTeam = toRussianTeam(bet.home_team || rawHome);
+  const awayTeam = toRussianTeam(bet.away_team || rawAway);
+  const leagueDisplay = toRussianLeague(bet.league, bet.country_name);
 
   const predictions = bet.all_predictions || [];
 
@@ -98,23 +102,23 @@ const MatchDetailModal = ({ bet, onClose }) => {
               <div className="flex flex-wrap items-center gap-2 mb-3">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r ${sportDisplay.color} rounded-full text-xs font-black border shadow-sm`}>
                   <span className="text-sm">{sportDisplay.icon}</span>
-                  <span className="uppercase text-[11px] tracking-wider font-extrabold">{sportDisplay.name}</span>
+                  <span className="uppercase text-[11px] tracking-wider font-extrabold font-heading">{sportDisplay.name}</span>
                 </span>
 
-                <span className="text-xs font-semibold px-2.5 py-1 bg-gray-800 text-gray-300 rounded-md border border-gray-700 inline-flex items-center gap-1.5">
+                <span className="text-xs font-bold px-3 py-1 bg-gray-800 text-gray-200 rounded-lg border border-gray-700 inline-flex items-center gap-1.5 shadow-sm">
                   {bet.country_flag_url && (
                     <img 
                       src={bet.country_flag_url} 
                       alt="" 
-                      className="w-3.5 h-2.5 object-cover rounded-[2px] opacity-75 shrink-0" 
+                      className="w-4 h-3 object-cover rounded-[2px] opacity-85 shrink-0" 
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                   )}
-                  <span>{bet.league || bet.country_name || "Лига"}</span>
+                  <span>{leagueDisplay}</span>
                 </span>
 
                 {bet.is_bet_of_the_day && (
-                  <span className="text-xs font-black text-amber-300 bg-amber-500/15 px-3 py-1 rounded-md border border-amber-400/40 flex items-center gap-1 animate-pulse">
+                  <span className="text-xs font-black text-amber-300 bg-amber-500/15 px-3 py-1 rounded-md border border-amber-400/40 flex items-center gap-1 animate-pulse font-heading">
                     🏆 СТАВКА ДНЯ • {sportDisplay.name.toUpperCase()}
                   </span>
                 )}
@@ -122,48 +126,48 @@ const MatchDetailModal = ({ bet, onClose }) => {
             );
           })()}
 
-          {/* Команды и время матча с эмблемами */}
+          {/* Команды и время матча с крупными эмблемами */}
           <div className="flex items-center justify-between gap-4 mt-3">
             <div className="flex flex-col items-center flex-1 text-center">
-              <TeamBadge teamName={homeTeam} logoUrl={bet.home_logo} size="lg" className="mb-2 !w-18 !h-18" />
-              <h3 className="font-bold text-white text-base leading-tight">{homeTeam}</h3>
-              <span className="text-[11px] text-gray-400 mt-0.5">Хозяева</span>
+              <TeamBadge teamName={homeTeam} logoUrl={bet.home_logo} size="xl" className="mb-2.5 !w-20 !h-20" />
+              <h3 className="font-black text-white text-lg sm:text-2xl leading-tight font-heading tracking-tight drop-shadow-sm">{homeTeam}</h3>
+              <span className="text-[11px] text-gray-400 font-bold mt-1 uppercase tracking-wider">Хозяева</span>
             </div>
 
             <div className="flex flex-col items-center justify-center px-2">
               {bet.final_score_home !== null && bet.final_score_away !== null ? (
                 <div className="flex flex-col items-center">
                   <div className="px-4 py-2 bg-gray-800/95 rounded-2xl border border-gray-600 text-center mb-1 shadow-inner">
-                    <span className="text-2xl font-black text-white tracking-wider">
+                    <span className="text-2xl font-black text-white tracking-wider font-mono">
                       {bet.final_score_home} : {bet.final_score_away}
                     </span>
-                    <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest block mt-0.5">
+                    <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest block mt-0.5 font-heading">
                       МАТЧ ЗАВЕРШЁН
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="px-3.5 py-1.5 bg-gray-800/90 rounded-2xl border border-gray-700 text-center mb-1 shadow-inner">
-                  <span className="text-[11px] text-gray-400 block font-semibold">
+                  <span className="text-[11px] text-gray-400 block font-semibold font-mono">
                     {mskTime.day}
                   </span>
-                  <span className="text-lg font-black text-white">
+                  <span className="text-lg font-black text-white font-mono">
                     {mskTime.time}
                   </span>
-                  <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest block mt-0.5">
+                  <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest block mt-0.5 font-heading">
                     МСК
                   </span>
                 </div>
               )}
               {bet.final_score_home === null && (
-                <span className="text-xs font-black text-gray-500 italic">VS</span>
+                <span className="text-xs font-black text-gray-500 italic font-heading">VS</span>
               )}
             </div>
 
             <div className="flex flex-col items-center flex-1 text-center">
-              <TeamBadge teamName={awayTeam} logoUrl={bet.away_logo} size="lg" className="mb-2 !w-18 !h-18" />
-              <h3 className="font-bold text-white text-base leading-tight">{awayTeam}</h3>
-              <span className="text-[11px] text-gray-400 mt-0.5">Гости</span>
+              <TeamBadge teamName={awayTeam} logoUrl={bet.away_logo} size="xl" className="mb-2.5 !w-20 !h-20" />
+              <h3 className="font-black text-white text-lg sm:text-2xl leading-tight font-heading tracking-tight drop-shadow-sm">{awayTeam}</h3>
+              <span className="text-[11px] text-gray-400 font-bold mt-1 uppercase tracking-wider">Гости</span>
             </div>
           </div>
 
@@ -336,11 +340,22 @@ const MatchDetailModal = ({ bet, onClose }) => {
                               </span>
                               <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
                                 <span>{p.source_type === 'telegram_channel' ? 'Telegram Канал' : 'Аналитический Портал'}</span>
-                                {p.source_weight && (
-                                  <span className="text-amber-400 font-semibold bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20">
-                                    Рейтинг: {p.source_weight}
+                                {p.sport_winrate ? (
+                                  <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border flex items-center gap-1 ${
+                                    p.sport_winrate >= 70
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : p.sport_winrate >= 55
+                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                      : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                                  }`}>
+                                    <span>{p.sport_winrate >= 70 ? '💎' : p.sport_winrate < 45 ? '⚠️' : '📊'}</span>
+                                    <span>{p.sport_winrate}% побед (Вес: {p.source_weight || 1}x)</span>
                                   </span>
-                                )}
+                                ) : p.source_weight ? (
+                                  <span className="text-amber-400 font-semibold bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20 text-[10px]">
+                                    Вес в ИИ: {p.source_weight}x
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
                           </div>

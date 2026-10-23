@@ -4,11 +4,13 @@ import {
   TrendingUp, Calculator, ArrowRight, CheckCircle2, AlertCircle 
 } from 'lucide-react';
 import { getDailyParlays, sendParlayToTelegram, sendSuperAlerts } from '../api';
+import { formatLeagueDisplay } from './TopBetCard';
+import { toRussianMatchName, toRussianLeague } from '../utils/russianNames';
 
 export default function DailyParlaysWidget() {
-  const [parlays, setParlays] = useState({ safe_parlay: null, hot_parlay: null });
+  const [parlays, setParlays] = useState({ ai_parlay: null, safe_parlay: null, hot_parlay: null });
   const [loading, setLoading] = useState(true);
-  const [selectedType, setSelectedType] = useState('safe'); // 'safe' | 'hot'
+  const [selectedType, setSelectedType] = useState('ai'); // 'ai' | 'safe' | 'hot'
   const [betAmount, setBetAmount] = useState(1000);
   const [enabledLegIds, setEnabledLegIds] = useState(new Set());
   const [copied, setCopied] = useState(false);
@@ -22,8 +24,10 @@ export default function DailyParlaysWidget() {
     try {
       const data = await getDailyParlays();
       setParlays(data);
-      // По умолчанию активируем все матчи для текущего экспресса
-      const activeParlay = selectedType === 'safe' ? data.safe_parlay : data.hot_parlay;
+      // Приоритет выбора: ai -> safe -> hot
+      const initialType = data.ai_parlay ? 'ai' : (data.safe_parlay ? 'safe' : 'hot');
+      setSelectedType(initialType);
+      const activeParlay = initialType === 'ai' ? data.ai_parlay : (initialType === 'safe' ? data.safe_parlay : data.hot_parlay);
       if (activeParlay && activeParlay.items) {
         setEnabledLegIds(new Set(activeParlay.items.map(it => it.match_id)));
       }
@@ -38,17 +42,17 @@ export default function DailyParlaysWidget() {
     fetchParlays();
   }, []);
 
-  // При смене вкладки safe/hot сбрасываем активные чекбоксы на все матчи нового экспресса
+  // При смене вкладки сбрасываем активные чекбоксы на все матчи нового экспресса
   const handleTypeChange = (type) => {
     setSelectedType(type);
-    const target = type === 'safe' ? parlays.safe_parlay : parlays.hot_parlay;
+    const target = type === 'ai' ? parlays.ai_parlay : (type === 'safe' ? parlays.safe_parlay : parlays.hot_parlay);
     if (target && target.items) {
       setEnabledLegIds(new Set(target.items.map(it => it.match_id)));
     }
     setTgFeedback(null);
   };
 
-  const currentParlay = selectedType === 'safe' ? parlays.safe_parlay : parlays.hot_parlay;
+  const currentParlay = selectedType === 'ai' ? parlays.ai_parlay : (selectedType === 'safe' ? parlays.safe_parlay : parlays.hot_parlay);
 
   // Переключение чекбокса отдельного события
   const toggleLeg = (matchId) => {
@@ -145,13 +149,13 @@ export default function DailyParlaysWidget() {
     );
   }
 
-  if (!parlays.safe_parlay && !parlays.hot_parlay) {
+  if (!parlays.ai_parlay && !parlays.safe_parlay && !parlays.hot_parlay) {
     return (
       <div className="p-8 bg-card rounded-2xl border border-gray-800 text-center">
         <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
         <h3 className="text-lg font-bold text-gray-200">Экспрессы формируются</h3>
         <p className="text-sm text-gray-400 mt-1">
-          Сейчас в линии недостаточно завершенных согласований между капперами. Запустите сбор или подождите начала туров.
+          Сейчас в линии недостаточно завершенных согласований между моделями. Запустите сбор или подождите формирования матчей.
         </p>
       </div>
     );
@@ -161,7 +165,7 @@ export default function DailyParlaysWidget() {
     <div className="bg-gradient-to-br from-card via-gray-900 to-[#121622] rounded-3xl border border-gray-800 p-5 sm:p-7 shadow-2xl relative overflow-hidden mb-8">
       {/* Фоновое свечение */}
       <div className={`absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl opacity-20 pointer-events-none transition-colors duration-500 ${
-        selectedType === 'safe' ? 'bg-emerald-500' : 'bg-orange-500'
+        selectedType === 'ai' ? 'bg-purple-500' : (selectedType === 'safe' ? 'bg-emerald-500' : 'bg-orange-500')
       }`} />
       
       {/* Шапка виджета */}
@@ -169,7 +173,11 @@ export default function DailyParlaysWidget() {
         <div>
           <div className="flex items-center gap-2.5">
             <div className={`p-2 rounded-xl text-white shadow-lg ${
-              selectedType === 'safe' ? 'bg-gradient-to-r from-emerald-600 to-teal-500 shadow-emerald-500/20' : 'bg-gradient-to-r from-orange-600 to-red-500 shadow-orange-500/20'
+              selectedType === 'ai'
+                ? 'bg-gradient-to-r from-purple-600 to-pink-500 shadow-purple-500/20'
+                : selectedType === 'safe'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-500 shadow-emerald-500/20'
+                  : 'bg-gradient-to-r from-orange-600 to-red-500 shadow-orange-500/20'
             }`}>
               <Zap className="w-5 h-5" />
             </div>
@@ -181,47 +189,64 @@ export default function DailyParlaysWidget() {
                 </span>
               </h2>
               <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
-                Математически оптимизированные купоны на основе консенсуса прогнозистов и коэффициентов
+                Математически оптимизированные купоны на основе консенсуса прогнозистов и суперкомпьютера ИИ
               </p>
             </div>
           </div>
         </div>
 
-        {/* Переключатель табов: Надёжный vs Огненный */}
-        <div className="flex items-center gap-2 p-1 bg-gray-950/80 rounded-2xl border border-gray-800 shrink-0 self-start md:self-auto">
-          <button
-            onClick={() => handleTypeChange('safe')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              selectedType === 'safe'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-400/40'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-            }`}
-          >
-            <Shield className="w-4 h-4 text-emerald-300" />
-            <span>🛡️ Надёжный</span>
-            {parlays.safe_parlay && (
+        {/* Переключатель табов: Экспресс Тройного ИИ vs Надёжный vs Огненный */}
+        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-950/80 rounded-2xl border border-gray-800 shrink-0 self-start md:self-auto">
+          {parlays.ai_parlay && (
+            <button
+              onClick={() => handleTypeChange('ai')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                selectedType === 'ai'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/20 ring-1 ring-purple-400/40'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <Zap className="w-4 h-4 text-purple-300" />
+              <span>🔥 ИИ-Экспресс</span>
+              <span className="ml-1 text-[11px] px-1.5 py-0.2 bg-black/30 rounded font-black text-purple-200">
+                x{parlays.ai_parlay.total_odds}
+              </span>
+            </button>
+          )}
+
+          {parlays.safe_parlay && (
+            <button
+              onClick={() => handleTypeChange('safe')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                selectedType === 'safe'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-400/40'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <Shield className="w-4 h-4 text-emerald-300" />
+              <span>🛡️ Надёжный</span>
               <span className="ml-1 text-[11px] px-1.5 py-0.2 bg-black/30 rounded font-black text-emerald-200">
                 x{parlays.safe_parlay.total_odds}
               </span>
-            )}
-          </button>
+            </button>
+          )}
 
-          <button
-            onClick={() => handleTypeChange('hot')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              selectedType === 'hot'
-                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/20 ring-1 ring-orange-400/40'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-            }`}
-          >
-            <Flame className="w-4 h-4 text-orange-300" />
-            <span>🚀 Огненный</span>
-            {parlays.hot_parlay && (
+          {parlays.hot_parlay && (
+            <button
+              onClick={() => handleTypeChange('hot')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                selectedType === 'hot'
+                  ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/20 ring-1 ring-orange-400/40'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <Flame className="w-4 h-4 text-orange-300" />
+              <span>🚀 Огненный</span>
               <span className="ml-1 text-[11px] px-1.5 py-0.2 bg-black/30 rounded font-black text-orange-200">
                 x{parlays.hot_parlay.total_odds}
               </span>
-            )}
-          </button>
+            </button>
+          )}
         </div>
       </div>
 
@@ -265,15 +290,15 @@ export default function DailyParlaysWidget() {
                     {/* Матч и команды */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 text-xs text-gray-400 mb-0.5">
-                        <span className="font-semibold text-gray-300">{item.league}</span>
+                        <span className="font-semibold text-gray-300">{toRussianLeague(item.league)}</span>
                         {timeFormatted && <span>• {timeFormatted} МСК</span>}
                         <span className="text-[10px] px-1.5 py-0.2 bg-blue-500/10 text-blue-400 rounded">
                           {item.sport_type}
                         </span>
                       </div>
                       
-                      <div className="flex items-center gap-2 font-bold text-sm sm:text-base text-white truncate">
-                        <span className="truncate">{item.match_name}</span>
+                      <div className="flex items-center gap-2 font-black text-sm sm:text-base text-white truncate font-heading tracking-tight">
+                        <span className="truncate">{toRussianMatchName(item.match_name)}</span>
                       </div>
                     </div>
                   </div>
@@ -404,6 +429,16 @@ export default function DailyParlaysWidget() {
                 <Send className={`w-3.5 h-3.5 text-blue-400 ${sendingTg ? 'animate-bounce' : ''}`} />
                 <span>{sendingTg ? 'Отправляем...' : 'Опубликовать экспресс в Telegram'}</span>
               </button>
+
+              <a
+                href="https://t.me/DthenBK_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-bold text-xs bg-blue-600/15 hover:bg-blue-600/25 text-blue-300 border border-blue-500/30 transition-all text-center"
+              >
+                <Send className="w-3.5 h-3.5 text-blue-400" />
+                <span>Запустить бота в Telegram (@DthenBK_bot)</span>
+              </a>
 
               {tgFeedback && (
                 <div className={`p-2 rounded-lg text-xs text-center font-semibold ${

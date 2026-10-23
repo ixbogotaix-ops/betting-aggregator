@@ -41,6 +41,15 @@ async def startup_event():
     from .scheduler import start_scheduler
     start_scheduler()
 
+    # Фоновый прогрев кэша Робобета
+    try:
+        import asyncio
+        from starlette.concurrency import run_in_threadpool
+        from .robobet_scraper import get_robobet_cached
+        asyncio.create_task(run_in_threadpool(get_robobet_cached))
+    except Exception:
+        pass
+
 # --- Эндпоинты для матчей ---
 
 @app.post("/api/matches/", response_model=schemas.MatchResponse, status_code=201)
@@ -91,12 +100,24 @@ async def create_prediction(prediction: schemas.PredictionCreate, db: AsyncSessi
     result = await db.execute(stmt)
     return result.scalar_one()
 
+_today_predictions_cache = {}
+_today_predictions_cache_ttl = 30  # 30 seconds
+
 @app.get("/api/predictions/today", response_model=List[schemas.MatchResponse])
 async def get_today_predictions(
     sport_type: Optional[str] = Query(None, description="Фильтр по виду спорта"),
     date: Optional[str] = Query(None, description="Дата в формате YYYY-MM-DD"),
+    upcoming_only: Optional[bool] = Query(False, description="Только не начавшиеся матчи"),
     db: AsyncSession = Depends(get_db)
 ):
+    import time as _t
+    cache_key = f"{sport_type}_{date}_{upcoming_only}"
+    now_ts = _t.time()
+    if cache_key in _today_predictions_cache:
+        c_ts, c_res = _today_predictions_cache[cache_key]
+        if now_ts - c_ts < _today_predictions_cache_ttl:
+            return c_res
+
     from datetime import timezone, timedelta
     moscow_tz = timezone(timedelta(hours=3))
     now_moscow = datetime.now(moscow_tz).replace(tzinfo=None)
@@ -109,8 +130,7 @@ async def get_today_predictions(
     start_filter = datetime.combine(target_date.date(), time.min)
     end_of_day = datetime.combine(target_date.date(), time.max)
     
-    # Если мы смотрим сегодняшний день, отсекаем матчи, которые уже начались
-    if target_date.date() == now_moscow.date():
+    if upcoming_only and target_date.date() == now_moscow.date():
         start_filter = now_moscow
 
     stmt = select(models.Match).options(
@@ -118,7 +138,7 @@ async def get_today_predictions(
     ).where(
         models.Match.match_date >= start_filter,
         models.Match.match_date <= end_of_day
-    )
+    ).order_by(models.Match.match_date.asc())
 
     result = await db.execute(stmt)
     matches = result.scalars().all()
@@ -126,8 +146,33 @@ async def get_today_predictions(
     if sport_type and sport_type != 'All':
         from .consensus import get_generic_sport
         matches = [m for m in matches if get_generic_sport(m.sport_type) == sport_type or (m.sport_type and m.sport_type.lower() == sport_type.lower())]
+
+    from .logo_service import get_team_logo, get_league_country, translate_team_name_to_ru
+    resp_list = []
+    for m in matches:
+        c_info = get_league_country(m.league, m.sport_type)
+        league_ru = c_info.get("league_ru") or m.league
+        h_ru = translate_team_name_to_ru(m.home_team)
+        a_ru = translate_team_name_to_ru(m.away_team)
+        h_logo = get_team_logo(m.home_team, m.sport_type, fast_only=True)
+        a_logo = get_team_logo(m.away_team, m.sport_type, fast_only=True)
+        resp_list.append(schemas.MatchResponse(
+            id=m.id,
+            sport_type=m.sport_type,
+            league=league_ru,
+            home_team=h_ru,
+            away_team=a_ru,
+            match_date=m.match_date,
+            status=m.status,
+            final_score_home=m.final_score_home,
+            final_score_away=m.final_score_away,
+            predictions=[schemas.PredictionResponse.model_validate(p) for p in m.predictions] if m.predictions else [],
+            home_logo=h_logo,
+            away_logo=a_logo
+        ))
     
-    return matches
+    _today_predictions_cache[cache_key] = (now_ts, resp_list)
+    return resp_list
 
 from .consensus import calculate_daily_top_bets, get_generic_sport
 from .schemas import TopBetResponse
@@ -143,20 +188,7 @@ async def get_top_daily_bets(
     top_bets = await calculate_daily_top_bets(db, sport_type, date, status_filter)
 
     if only_bet_of_the_day:
-        filtered_bets = []
-        seen_sports = set()
-        for bet in top_bets:
-            generic = get_generic_sport(bet.sport_type)
-            if bet.is_bet_of_the_day and generic not in seen_sports:
-                filtered_bets.append(bet)
-                seen_sports.add(generic)
-        for bet in top_bets:
-            generic = get_generic_sport(bet.sport_type)
-            if generic not in seen_sports:
-                bet.is_bet_of_the_day = True
-                filtered_bets.append(bet)
-                seen_sports.add(generic)
-        return filtered_bets
+        return [b for b in top_bets if b.is_bet_of_the_day]
 
     return top_bets
 
@@ -268,12 +300,16 @@ async def get_ai_analysis(
     return {"ai_verdict": ai_verdict}
 
 @app.get("/api/stats/overview", response_model=schemas.PerformanceStatsResponse)
-async def get_stats_overview(db: AsyncSession = Depends(get_db)):
+async def get_stats_overview(
+    sport: Optional[str] = Query(None, description="Фильтр по виду спорта"),
+    db: AsyncSession = Depends(get_db)
+):
     """
-    Возвращает статистику проходимости (Winrate, ROI) и рейтинг капперов/источников.
+    Возвращает статистику проходимости (Winrate, ROI) и рейтинг капперов/источников,
+    в том числе с фильтрацией по конкретному виду спорта.
     """
     from .settlement_service import get_performance_stats
-    stats = await get_performance_stats(db)
+    stats = await get_performance_stats(db, sport_filter=sport)
     return stats
 
 @app.post("/api/results/sync")
@@ -292,16 +328,117 @@ async def sync_match_results(background_tasks: BackgroundTasks, db: AsyncSession
     background_tasks.add_task(run_settlement)
     return {"status": "started", "message": "Проверка результатов матчей запущена в фоновом режиме"}
 
-@app.get("/api/results/recent", response_model=List[TopBetResponse])
-async def get_recent_results(
-    sport_type: Optional[str] = Query(None, description="Фильтр по виду спорта"),
+@app.get("/api/archive/summary")
+async def get_archive_summary(
+    sport: Optional[str] = Query(None, description="Фильтр по виду спорта"),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Возвращает недавние завершённые матчи с результатами ставок (Архив / Прошедшие).
+    Возвращает календарную статистику архива ставок по дням (W/L/R, winrate, profit, ROI)
+    и суммарную сводку за всё время.
     """
-    finished_bets = await calculate_daily_top_bets(db, sport_type=sport_type, date_str=None, status_filter="finished")
+    from .settlement_service import get_archive_calendar_summary
+    return await get_archive_calendar_summary(db, sport_type=sport)
+
+@app.get("/api/stats/monthly-performance")
+async def get_monthly_performance_endpoint(
+    month: Optional[str] = Query(None, description="Месяц в формате YYYY-MM (например, 2026-10)"),
+    mode: Optional[str] = Query("botd", description="Режим: botd (Ставка Дня) или robobet (Робобет)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Возвращает подневную статистику Ставок Дня (строго 1 ставка на каждый день месяца,
+    например, на 17 октября ровно 17 ставок):
+    - Список матчей по дням с исходами и статусом Прошло / Не прошло
+    - Итоговый подсчет за выбранный месяц (в конце списка)
+    - Подсчет за месяц на сегодняшний день (Month-To-Date)
+    - Подсчет вообще за ВСЕ месяцы (All-Time)
+    - Ссылки на предыдущие месяцы
+    """
+    from .monthly_stats_service import get_monthly_performance
+    return await get_monthly_performance(db, month_str=month, mode=mode)
+
+@app.get("/api/results/recent", response_model=List[TopBetResponse])
+async def get_recent_results(
+    sport_type: Optional[str] = Query(None, description="Фильтр по виду спорта"),
+    date: Optional[str] = Query(None, description="Дата в формате YYYY-MM-DD"),
+    category: Optional[str] = Query(None, description="Категория: all, botd, cappers, robobet"),
+    outcome_filter: Optional[str] = Query(None, description="win, loss, refund"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Возвращает завершённые матчи с результатами ставок (Архив / Прошедшие).
+    Поддерживает фильтрацию по виду спорта, конкретной дате, категории источника и исходу.
+    """
+    finished_bets = await calculate_daily_top_bets(db, sport_type=sport_type, date_str=date, status_filter="finished")
+
+    # Если запрошены ставки Робобет или все ставки, дополняем завершёнными матчами Робобета
+    if category in [None, "all", "robobet"] and (not sport_type or sport_type in ["All", "Football"]):
+        try:
+            from .robobet_scraper import get_robobet_cached
+            r_data = get_robobet_cached(force_refresh=False)
+            r_matches = r_data.get("matches", [])
+            r_finished = [m for m in r_matches if m.get("is_finished") and m.get("score")]
+            
+            # Проверяем фильтрацию по дате для Робобета (по Московскому времени)
+            from datetime import timezone, timedelta
+            moscow_tz = timezone(timedelta(hours=3))
+            now_moscow = datetime.now(moscow_tz).replace(tzinfo=None)
+            now_str = now_moscow.strftime("%Y-%m-%d")
+            for rm in r_finished:
+                if date and date != "ALL" and date != now_str:
+                    continue
+                # Избегаем дубликатов по именам команд
+                already_in = any(
+                    (b.home_team and b.home_team.lower() in rm["team1"].lower()) or
+                    (b.match_name and rm["team1"].lower() in b.match_name.lower())
+                    for b in finished_bets
+                )
+                if not already_in:
+                    finished_bets.append(TopBetResponse(
+                        match_id=abs(hash(rm["id"])) % 10000000,
+                        match_name=f"{rm['team1']} — {rm['team2']}",
+                        match_date=datetime.now(),
+                        league=rm.get("country", "Футбол"),
+                        sport_type="Football",
+                        recommended_outcome=rm.get("recommendation", "П1"),
+                        average_odds=rm.get("rec_odd", 1.8),
+                        confidence_score=rm.get("rec_prob", 65),
+                        supporting_sources=["Робобет ИИ (Диксон-Коулз/Пуассон)"],
+                        is_bet_of_the_day=False,
+                        ai_insight=f"Математическая модель: П1 {rm.get('prob_1')}% | X {rm.get('prob_x')}% | П2 {rm.get('prob_2')}%. Ожидаемая выгода +EV: {rm.get('ev')}",
+                        value_badge=f"+EV: {int(rm.get('ev', 0)*100)}%" if rm.get('is_value') else None,
+                        ev_percent=rm.get('ev', 0.0),
+                        home_team=rm.get("team1"),
+                        away_team=rm.get("team2"),
+                        home_logo=rm.get("home_logo"),
+                        away_logo=rm.get("away_logo"),
+                        country_name=rm.get("country"),
+                        country_flag_url=rm.get("country_flag_url"),
+                        country_flag_emoji=rm.get("country_emoji"),
+                        final_score_home=rm.get("home_score"),
+                        final_score_away=rm.get("away_score"),
+                        status="finished",
+                        bet_result=rm.get("result_status"),
+                        all_predictions=[]
+                    ))
+        except Exception as e:
+            logger.warning(f"Ошибка загрузки завершенных матчей Робобета: {e}")
+
+    # Фильтр по категории
+    if category == "botd":
+        finished_bets = [b for b in finished_bets if b.is_bet_of_the_day]
+    elif category == "cappers":
+        finished_bets = [b for b in finished_bets if not any("Робобет" in s for s in b.supporting_sources)]
+    elif category == "robobet":
+        finished_bets = [b for b in finished_bets if any("Робобет" in s for s in b.supporting_sources)]
+
+    # Фильтр по исходу (win, loss, refund)
+    if outcome_filter and outcome_filter != "all":
+        finished_bets = [b for b in finished_bets if b.bet_result == outcome_filter]
+
     return finished_bets
+
 
 @app.get("/api/parlays/daily", response_model=schemas.DailyParlaysResponse)
 async def get_daily_parlays_endpoint(db: AsyncSession = Depends(get_db)):
@@ -315,7 +452,7 @@ async def get_daily_parlays_endpoint(db: AsyncSession = Depends(get_db)):
 
 @app.post("/api/telegram/send-parlay")
 async def send_parlay_to_telegram(
-    parlay_type: str = Query("safe", description="safe или hot"),
+    parlay_type: str = Query("ai", description="ai, safe или hot"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -325,7 +462,12 @@ async def send_parlay_to_telegram(
     from .telegram_bot import send_parlay_alert
     
     parlays = await generate_daily_parlays(db)
-    selected = parlays.get("safe_parlay" if parlay_type == "safe" else "hot_parlay")
+    if parlay_type == "ai":
+        selected = parlays.get("ai_parlay") or parlays.get("safe_parlay")
+    elif parlay_type == "safe":
+        selected = parlays.get("safe_parlay")
+    else:
+        selected = parlays.get("hot_parlay")
     
     if not selected:
         raise HTTPException(status_code=404, detail="Экспресс данного типа не сформирован (недостаточно матчей)")
@@ -414,4 +556,25 @@ async def get_current_user_profile(
 @app.post("/api/auth/logout")
 async def logout():
     return {"status": "ok", "message": "Успешный выход из системы"}
+
+# --- ЭНДПОИНТЫ РОБОБЕТ (МАТЕМАТИЧЕСКАЯ ИИ-МОДЕЛЬ) ---
+
+@app.get("/api/robobet")
+async def get_robobet_predictions(force: bool = False):
+    """
+    Возвращает список математических прогнозов Робобет (Диксон-Коулз/Пуассон),
+    распределение вероятностей (П1, X, П2) и вычисленный 'Матч Дня от Робобет'.
+    Выполняется в threadpool, чтобы не блокировать асинхронный event loop!
+    """
+    from starlette.concurrency import run_in_threadpool
+    from .robobet_scraper import get_robobet_cached
+    return await run_in_threadpool(get_robobet_cached, force_refresh=force)
+
+@app.post("/api/robobet/refresh")
+async def refresh_robobet_predictions():
+    """Принудительно обновляет базу матчей Робобета."""
+    from starlette.concurrency import run_in_threadpool
+    from .robobet_scraper import get_robobet_cached
+    return await run_in_threadpool(get_robobet_cached, force_refresh=True)
+
 

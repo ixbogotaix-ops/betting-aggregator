@@ -187,35 +187,38 @@ async def process_capper_predictions():
                 best_ids_dict = ai_result.get('bet_of_the_day_match_ids', {})
                 best_ids = [int(v) for v in best_ids_dict.values() if str(v).isdigit()] if isinstance(best_ids_dict, dict) else []
                 best_picks = ai_result.get('best_picks_by_match', {})
-                insights = ai_result.get('insights', {})
-                reasonings = ai_result.get('reasoning', {})
+                from app.consensus import get_generic_sport
+                seen_botd_sports = set()
                 for t_bet in top_bets:
                     match_id = t_bet.match_id
                     stmt = select(Match).where(Match.id == match_id)
                     db_match = (await session.execute(stmt)).scalar_one_or_none()
                     if db_match:
-                        if str(match_id) in best_picks and best_picks[str(match_id)]:
-                            db_match.chosen_outcome = str(best_picks[str(match_id)]).strip()
                         db_match.ai_insight = insights.get(str(match_id), '')
                         db_match.cappers_reasoning = reasonings.get(str(match_id), '')
-                        if match_id in best_ids:
+                        gen_s = get_generic_sport(t_bet.sport_type)
+                        if match_id in best_ids and gen_s not in seen_botd_sports and (t_bet.average_odds or 0.0) >= 1.55:
                             db_match.is_bet_of_the_day = True
+                            seen_botd_sports.add(gen_s)
+                        else:
+                            db_match.is_bet_of_the_day = False
                 await session.commit()
             else:
                 logger.warning("ИИ не смог вернуть JSON (или сбой API). Включаем Fallback: выбираем топ-матчи математически!")
-                from app.main import get_generic_sport
+                from app.consensus import get_generic_sport
                 seen_sports = set()
-                # top_bets уже отсортированы по confidence_score (от большего к меньшему)
                 for t_bet in top_bets:
                     generic_s = get_generic_sport(t_bet.sport_type)
-                    if generic_s not in seen_sports:
-                        seen_sports.add(generic_s)
-                        stmt = select(Match).where(Match.id == t_bet.match_id)
-                        db_match = (await session.execute(stmt)).scalar_one_or_none()
-                        if db_match:
+                    stmt = select(Match).where(Match.id == t_bet.match_id)
+                    db_match = (await session.execute(stmt)).scalar_one_or_none()
+                    if db_match:
+                        if generic_s not in seen_sports and (t_bet.average_odds or 0.0) >= 1.55:
+                            seen_sports.add(generic_s)
                             db_match.is_bet_of_the_day = True
                             db_match.ai_insight = "🤖 Базовый алгоритм: Наивысшая уверенность среди капперов."
                             db_match.cappers_reasoning = "Сработало математическое резервирование из-за сбоя языковой модели."
+                        else:
+                            db_match.is_bet_of_the_day = False
                 await session.commit()
 
             # 5. Отправка в Telegram пользователю
