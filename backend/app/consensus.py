@@ -987,5 +987,12 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 bet.is_bet_of_the_day = False
                 bet.slot_label = None
 
+        # Гарантируем обязательное наличие качественных эмблем у Топ-3 матчей и ведущих кандидатов
+    for bet in top_bets[:6]:
+        if not bet.home_logo:
+            bet.home_logo = get_team_logo(bet.home_team, bet.sport_type, fast_only=False)
+        if not bet.away_logo:
+            bet.away_logo = get_team_logo(bet.away_team, bet.sport_type, fast_only=False)
+
     _daily_top_bets_cache[cache_key] = (now_ts, top_bets)
     return top_bets

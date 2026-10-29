@@ -49,6 +49,78 @@ _load_disk_cache()
 
 # Предустановленные официальные эмблемы (ESPN CDN & TheSportsDB CDN)
 KNOWN_TEAM_LOGOS = {
+    # --- Топ-3 Ставки Дня (сегодняшние и актуальные клубы) ---
+    "аль-шулла": "https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png",
+    "al-shoulla": "https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png",
+    "al shoulla": "https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png",
+    "аль шула": "https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png",
+    "shoulla": "https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png",
+
+    "аль-вашм": "https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png",
+    "al-washm": "https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png",
+    "al washm": "https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png",
+    "аль вашм": "https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png",
+    "washm": "https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png",
+
+    "хантерс": "https://upload.wikimedia.org/wikipedia/en/e/e2/Hunters_FC_logo.png",
+    "hunters": "https://upload.wikimedia.org/wikipedia/en/e/e2/Hunters_FC_logo.png",
+    "hunters fc": "https://upload.wikimedia.org/wikipedia/en/e/e2/Hunters_FC_logo.png",
+
+    "сентрал сталлионс": "https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png",
+    "central stallions": "https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png",
+    "central stallions fc": "https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png",
+    "stallions": "https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png",
+    "тюв буганууд": "https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png",
+    "tuv buganuud": "https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png",
+
+    "каса пиа": "https://a.espncdn.com/i/teamlogos/soccer/500/21581.png",
+    "casa pia": "https://a.espncdn.com/i/teamlogos/soccer/500/21581.png",
+    "casa pia ac": "https://a.espncdn.com/i/teamlogos/soccer/500/21581.png",
+
+    "спортинг": "https://a.espncdn.com/i/teamlogos/soccer/500/2250.png",
+    "спортинг лиссабон": "https://a.espncdn.com/i/teamlogos/soccer/500/2250.png",
+    "sporting cp": "https://a.espncdn.com/i/teamlogos/soccer/500/2250.png",
+    "sporting lisbon": "https://a.espncdn.com/i/teamlogos/soccer/500/2250.png",
+
+    # --- Трек-рекорд и архивные матчи ---
+    "рыбакина": "https://a.espncdn.com/i/headshots/tennis/players/full/3126.png",
+    "елена рыбакина": "https://a.espncdn.com/i/headshots/tennis/players/full/3126.png",
+    "elena rybakina": "https://a.espncdn.com/i/headshots/tennis/players/full/3126.png",
+    "путинцева": "https://a.espncdn.com/i/headshots/tennis/players/full/1802.png",
+    "юлия путинцева": "https://a.espncdn.com/i/headshots/tennis/players/full/1802.png",
+    "yulia putintseva": "https://a.espncdn.com/i/headshots/tennis/players/full/1802.png",
+    "сент-луис блюз": "https://a.espncdn.com/i/teamlogos/nhl/500/stl.png",
+    "st louis blues": "https://a.espncdn.com/i/teamlogos/nhl/500/stl.png",
+    "монреаль канадиенс": "https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png",
+    "montreal canadiens": "https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png",
+
+    # --- Другие популярные клубы ---
+    "абха": "https://a.espncdn.com/i/teamlogos/soccer/500/19532.png",
+    "abha": "https://a.espncdn.com/i/teamlogos/soccer/500/19532.png",
+    "аделаида юнайтед": "https://a.espncdn.com/i/teamlogos/soccer/500/3932.png",
+    "adelaide united": "https://a.espncdn.com/i/teamlogos/soccer/500/3932.png",
+    "сеара": "https://a.espncdn.com/i/teamlogos/soccer/500/6078.png",
+    "ceara": "https://a.espncdn.com/i/teamlogos/soccer/500/6078.png",
+    "сантос": "https://a.espncdn.com/i/teamlogos/soccer/500/2674.png",
+    "santos": "https://a.espncdn.com/i/teamlogos/soccer/500/2674.png",
+    "атлетико минейро": "https://a.espncdn.com/i/teamlogos/soccer/500/3445.png",
+    "atletico mineiro": "https://a.espncdn.com/i/teamlogos/soccer/500/3445.png",
+    "крузейро": "https://a.espncdn.com/i/teamlogos/soccer/500/3446.png",
+    "cruzeiro": "https://a.espncdn.com/i/teamlogos/soccer/500/3446.png",
+    "бостон брюинз": "https://a.espncdn.com/i/teamlogos/nhl/500/bos.png",
+    "boston bruins": "https://a.espncdn.com/i/teamlogos/nhl/500/bos.png",
+    "кливленд кавальерс": "https://a.espncdn.com/i/teamlogos/nba/500/cle.png",
+    "cleveland cavaliers": "https://a.espncdn.com/i/teamlogos/nba/500/cle.png",
+
+    # --- Киберспорт ---
+    "mouz": "https://img-cdn.hltv.org/teamlogo/k1k_nO29XF1wB4T-sBwD2i.png?ixlib=java-2.1.0&s=1c67e813a3ea5a60e1ad6d7e29bb37fe",
+    "liquid": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/esports/500/teamliquid.png",
+    "team liquid": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/esports/500/teamliquid.png",
+    "eternal fire": "https://img-cdn.hltv.org/teamlogo/v1V0vLhGj9Wl1zK_X9R7dY.png?ixlib=java-2.1.0&s=a49e9c8bc460eece7f642457c1ecde0f",
+    "spirit": "https://img-cdn.hltv.org/teamlogo/8jP2lQJj042F7Yx9Qp6N_L.png?ixlib=java-2.1.0&s=e60bf764f5e7c2a71f005e83ec55172f",
+    "team spirit": "https://img-cdn.hltv.org/teamlogo/8jP2lQJj042F7Yx9Qp6N_L.png?ixlib=java-2.1.0&s=e60bf764f5e7c2a71f005e83ec55172f",
+    "nemiga": "https://img-cdn.hltv.org/teamlogo/qCflR529iYm_vH661k1_dZ.png?ixlib=java-2.1.0&s=47b777a8848dcf7d7da8fb15ba5fa095",
+    "parivision": "https://img-cdn.hltv.org/teamlogo/zK16k7G_y08iL_mZ6E74_M.png?ixlib=java-2.1.0&s=f366184d081f26f6eb8b75f8f533925c",
     # --- Американский футбол NFL (Все 32 команды) ---
     "arizona cardinals": "https://a.espncdn.com/i/teamlogos/nfl/500/ari.png",
     "atlanta falcons": "https://a.espncdn.com/i/teamlogos/nfl/500/atl.png",
@@ -995,22 +1067,24 @@ def get_team_logo(team_name: str, sport: str = "", fast_only: bool = False) -> O
     if fast_only:
         return None
 
-    # 3. Запрос к TheSportsDB API v3 (официальный ключ '3')
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SportsAggregator/2.0"}
+    # 3. Динамический поиск через официальный ESPN Search API (быстро, надежно, охватывает все лиги)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     for query_candidate in search_variants:
         if len(query_candidate) < 3:
             continue
         try:
-            url = f"https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t={urllib.parse.quote(query_candidate)}"
+            url = f"https://site.web.api.espn.com/apis/search/v2?query={urllib.parse.quote(query_candidate)}"
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=2.5) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
-                if data and data.get("teams"):
-                    badge = data["teams"][0].get("strBadge")
-                    if badge and badge.startswith("http"):
-                        for v in search_variants:
-                            _save_to_disk_cache(v, badge)
-                        return badge
+                for sec in data.get('results', []):
+                    if sec.get('type') in ['team', 'athlete']:
+                        for item in sec.get('contents', []):
+                            img = item.get('image', {}).get('default')
+                            if img and ('teamlogos' in img or 'headshots' in img):
+                                for v in search_variants:
+                                    _save_to_disk_cache(v, img)
+                                return img
         except Exception:
             continue
 

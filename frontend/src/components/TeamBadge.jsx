@@ -45,6 +45,79 @@ const getInitials = (name = '') => {
 };
 
 const FALLBACK_LOGOS = {
+  // Топ-3 Ставки Дня (сегодняшние клубы)
+  'аль-шулла': 'https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png',
+  'аль шула': 'https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png',
+  'al-shoulla': 'https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png',
+  'al shoulla': 'https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png',
+  'shoulla': 'https://upload.wikimedia.org/wikipedia/en/0/0c/Al_Shoulla_FC_logo.png',
+
+  'аль-вашм': 'https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png',
+  'аль вашм': 'https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png',
+  'al-washm': 'https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png',
+  'al washm': 'https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png',
+  'washm': 'https://www.saff.com.sa/uploadcenter/saffteamlarge1661723269.png',
+
+  'хантерс': 'https://upload.wikimedia.org/wikipedia/en/e/e2/Hunters_FC_logo.png',
+  'hunters': 'https://upload.wikimedia.org/wikipedia/en/e/e2/Hunters_FC_logo.png',
+  'hunters fc': 'https://upload.wikimedia.org/wikipedia/en/e/e2/Hunters_FC_logo.png',
+
+  'сентрал сталлионс': 'https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png',
+  'central stallions': 'https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png',
+  'stallions': 'https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png',
+  'тюв буганууд': 'https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png',
+  'tuv buganuud': 'https://upload.wikimedia.org/wikipedia/en/a/ac/Central_Stallions_FC_Logo.png',
+
+  'каса пиа': 'https://a.espncdn.com/i/teamlogos/soccer/500/21581.png',
+  'casa pia': 'https://a.espncdn.com/i/teamlogos/soccer/500/21581.png',
+  'casa pia ac': 'https://a.espncdn.com/i/teamlogos/soccer/500/21581.png',
+
+  'спортинг': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
+  'спортинг лиссабон': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
+  'sporting cp': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
+  'sporting lisbon': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
+
+  // Трек-рекорд и архивные матчи
+  'рыбакина': 'https://a.espncdn.com/i/headshots/tennis/players/full/3126.png',
+  'елена рыбакина': 'https://a.espncdn.com/i/headshots/tennis/players/full/3126.png',
+  'elena rybakina': 'https://a.espncdn.com/i/headshots/tennis/players/full/3126.png',
+  'путинцева': 'https://a.espncdn.com/i/headshots/tennis/players/full/1802.png',
+  'юлия путинцева': 'https://a.espncdn.com/i/headshots/tennis/players/full/1802.png',
+  'yulia putintseva': 'https://a.espncdn.com/i/headshots/tennis/players/full/1802.png',
+  'сент-луис блюз': 'https://a.espncdn.com/i/teamlogos/nhl/500/stl.png',
+  'st louis blues': 'https://a.espncdn.com/i/teamlogos/nhl/500/stl.png',
+  'монреаль канадиенс': 'https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png',
+  'montreal canadiens': 'https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png',
+
+  // Другие популярные клубы
+  'абха': 'https://a.espncdn.com/i/teamlogos/soccer/500/19532.png',
+  'abha': 'https://a.espncdn.com/i/teamlogos/soccer/500/19532.png',
+  'аделаида юнайтед': 'https://a.espncdn.com/i/teamlogos/soccer/500/3932.png',
+  'adelaide united': 'https://a.espncdn.com/i/teamlogos/soccer/500/3932.png',
+  'сеара': 'https://a.espncdn.com/i/teamlogos/soccer/500/6078.png',
+  'ceara': 'https://a.espncdn.com/i/teamlogos/soccer/500/6078.png',
+  'сантос': 'https://a.espncdn.com/i/teamlogos/soccer/500/2674.png',
+  'santos': 'https://a.espncdn.com/i/teamlogos/soccer/500/2674.png',
+  'атлетико минейро': 'https://a.espncdn.com/i/teamlogos/soccer/500/3445.png',
+  'atletico mineiro': 'https://a.espncdn.com/i/teamlogos/soccer/500/3445.png',
+  'крузейро': 'https://a.espncdn.com/i/teamlogos/soccer/500/3446.png',
+  'cruzeiro': 'https://a.espncdn.com/i/teamlogos/soccer/500/3446.png',
+  'бостон брюинз': 'https://a.espncdn.com/i/teamlogos/nhl/500/bos.png',
+  'boston bruins': 'https://a.espncdn.com/i/teamlogos/nhl/500/bos.png',
+  'кливленд кавальерс': 'https://a.espncdn.com/i/teamlogos/nba/500/cle.png',
+  'cleveland cavaliers': 'https://a.espncdn.com/i/teamlogos/nba/500/cle.png',
+
+  // Киберспорт
+  'mouz': 'https://img-cdn.hltv.org/teamlogo/k1k_nO29XF1wB4T-sBwD2i.png?ixlib=java-2.1.0&s=1c67e813a3ea5a60e1ad6d7e29bb37fe',
+  'liquid': 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/esports/500/teamliquid.png',
+  'team liquid': 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/esports/500/teamliquid.png',
+  'eternal fire': 'https://img-cdn.hltv.org/teamlogo/v1V0vLhGj9Wl1zK_X9R7dY.png?ixlib=java-2.1.0&s=a49e9c8bc460eece7f642457c1ecde0f',
+  'spirit': 'https://img-cdn.hltv.org/teamlogo/8jP2lQJj042F7Yx9Qp6N_L.png?ixlib=java-2.1.0&s=e60bf764f5e7c2a71f005e83ec55172f',
+  'team spirit': 'https://img-cdn.hltv.org/teamlogo/8jP2lQJj042F7Yx9Qp6N_L.png?ixlib=java-2.1.0&s=e60bf764f5e7c2a71f005e83ec55172f',
+  'nemiga': 'https://img-cdn.hltv.org/teamlogo/qCflR529iYm_vH661k1_dZ.png?ixlib=java-2.1.0&s=47b777a8848dcf7d7da8fb15ba5fa095',
+  'parivision': 'https://img-cdn.hltv.org/teamlogo/zK16k7G_y08iL_mZ6E74_M.png?ixlib=java-2.1.0&s=f366184d081f26f6eb8b75f8f533925c',
+
+  // Базовые топовые европейские
   'бенфика': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
   'benfica': 'https://a.espncdn.com/i/teamlogos/soccer/500/1929.png',
   'неймеген': 'https://r2.thesportsdb.com/images/media/team/badge/t5qjle1701019868.png',
@@ -60,6 +133,22 @@ const FALLBACK_LOGOS = {
   'левски софия': 'https://r2.thesportsdb.com/images/media/team/badge/evevzv1626443555.png',
   'реал мадрид': 'https://a.espncdn.com/i/teamlogos/soccer/500/86.png',
   'real madrid': 'https://a.espncdn.com/i/teamlogos/soccer/500/86.png',
+  'барселона': 'https://a.espncdn.com/i/teamlogos/soccer/500/83.png',
+  'barcelona': 'https://a.espncdn.com/i/teamlogos/soccer/500/83.png',
+  'арсенал': 'https://a.espncdn.com/i/teamlogos/soccer/500/359.png',
+  'arsenal': 'https://a.espncdn.com/i/teamlogos/soccer/500/359.png',
+  'манчестер сити': 'https://a.espncdn.com/i/teamlogos/soccer/500/382.png',
+  'manchester city': 'https://a.espncdn.com/i/teamlogos/soccer/500/382.png',
+  'ливерпуль': 'https://r2.thesportsdb.com/images/media/team/badge/kfaher1737969724.png',
+  'liverpool': 'https://r2.thesportsdb.com/images/media/team/badge/kfaher1737969724.png',
+  'челси': 'https://a.espncdn.com/i/teamlogos/soccer/500/363.png',
+  'chelsea': 'https://a.espncdn.com/i/teamlogos/soccer/500/363.png',
+  'ювентус': 'https://a.espncdn.com/i/teamlogos/soccer/500/111.png',
+  'милан': 'https://a.espncdn.com/i/teamlogos/soccer/500/103.png',
+  'интер': 'https://a.espncdn.com/i/teamlogos/soccer/500/110.png',
+  'бавария': 'https://a.espncdn.com/i/teamlogos/soccer/500/132.png',
+  'боруссия д': 'https://a.espncdn.com/i/teamlogos/soccer/500/124.png',
+  'псж': 'https://a.espncdn.com/i/teamlogos/soccer/500/160.png',
 };
 
 /**
@@ -79,7 +168,15 @@ const TeamBadge = ({ teamName = '', logoUrl = '', size = 'md', className = '' })
   }, [logoUrl, teamName]);
 
   const cleanKey = (teamName || '').toLowerCase().trim();
-  const fallbackUrl = FALLBACK_LOGOS[cleanKey];
+  let fallbackUrl = FALLBACK_LOGOS[cleanKey];
+  if (!fallbackUrl) {
+    for (const [k, v] of Object.entries(FALLBACK_LOGOS)) {
+      if (cleanKey.includes(k) || (k.length > 3 && cleanKey.includes(k))) {
+        fallbackUrl = v;
+        break;
+      }
+    }
+  }
 
   // Валидный ли основной URL логотипа (исключаем ui-avatars)
   const isPrimaryValid = Boolean(
