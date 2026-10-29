@@ -490,6 +490,18 @@ async def trigger_super_consensus_alerts(db: AsyncSession = Depends(get_db)):
     sent_count = await check_and_notify_super_consensus(top_bets)
     return {"status": "ok", "sent_alerts_count": sent_count}
 
+@app.post("/api/telegram/send-yesterday-report")
+async def trigger_telegram_yesterday_report(
+    target_date: Optional[str] = Query(None, description="Дата в формате YYYY-MM-DD (по умолчанию вчера)"),
+    chat_id: Optional[str] = Query(None, description="Chat ID получателя (по умолчанию канал/чат из .env)")
+):
+    """
+    Отправляет в Telegram утренний отчёт по результатам вчерашних ставок и сводную статистику за текущий месяц.
+    """
+    from .telegram_bot import send_yesterday_settlement_and_monthly_stats_report
+    success = await send_yesterday_settlement_and_monthly_stats_report(chat_id=chat_id, target_date=target_date)
+    return {"status": "ok" if success else "error", "sent": success, "target_date": target_date}
+
 # --- АВТОРИЗАЦИЯ ЧЕРЕЗ GOOGLE ---
 
 @app.post("/api/auth/google", response_model=schemas.AuthResponse)

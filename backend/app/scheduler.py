@@ -43,6 +43,20 @@ def start_scheduler():
         except Exception as e:
             logger.warning(f"Ошибка отправки Telegram алертов: {e}")
 
+    # Утренний отчет об итогах вчерашних ставок и статистике за месяц в 10:00 МСК
+    async def daily_results_report_job():
+        from app.telegram_bot import send_yesterday_settlement_and_monthly_stats_report
+        try:
+            await send_yesterday_settlement_and_monthly_stats_report()
+            logger.info("Утренний отчет по итогам вчерашних ставок и статистике месяца успешно отправлен в Telegram.")
+        except Exception as e:
+            logger.error(f"Ошибка отправки утреннего отчета по результатам в Telegram: {e}")
+
+    scheduler.add_job(
+        daily_results_report_job,
+        CronTrigger(hour=10, minute=0, timezone="Europe/Moscow")
+    )
+
     # Утренний дайджест в 10:30 МСК
     async def morning_digest_job():
         from app.telegram_bot import notify_daily_morning_digest

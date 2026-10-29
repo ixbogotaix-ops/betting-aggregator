@@ -16,7 +16,7 @@ _NOTIFIED_TRIPLE_AI_IDS = set()
 MAIN_KEYBOARD = {
     "keyboard": [
         [{"text": "🏆 Ставка дня"}, {"text": "🤖 Топ ИИ (3/3)"}],
-        [{"text": "⚡ Экспресс дня"}, {"text": "📊 Статистика архива"}],
+        [{"text": "⚡ Экспресс дня"}, {"text": "📊 Итоги & Статистика"}],
         [{"text": "🌐 Открыть сайт"}]
     ],
     "resize_keyboard": True,
@@ -281,6 +281,151 @@ async def notify_evening_summary():
     except Exception as e:
         logger.error(f"Ошибка вечерней рассылки отчета: {e}")
 
+async def send_yesterday_settlement_and_monthly_stats_report(chat_id: Optional[str] = None, target_date: Optional[str] = None) -> bool:
+    """
+    Отправляет утренний отчёт в Telegram по результатам ставок за вчерашний день
+    и сводную статистику за текущий месяц (сколько прошло, сколько не прошло, винрейт, прибыль в флэтах).
+    """
+    from .database import AsyncSessionLocal
+    from .monthly_stats_service import get_monthly_performance
+    from .consensus import calculate_daily_top_bets, get_daily_top3_lock
+
+    moscow_tz = timezone(timedelta(hours=3))
+    now = datetime.now(moscow_tz)
+
+    if not target_date:
+        y_dt = now - timedelta(days=1)
+        target_date = y_dt.strftime("%Y-%m-%d")
+    else:
+        try:
+            y_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        except Exception:
+            y_dt = now - timedelta(days=1)
+            target_date = y_dt.strftime("%Y-%m-%d")
+
+    day_num = y_dt.day
+    month_names_gen = {
+        1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+        5: "мая", 6: "июня", 7: "июля", 8: "августа",
+        9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+    }
+    month_names_nom = {
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    }
+    date_formatted_ru = f"{day_num} {month_names_gen.get(y_dt.month, '')}"
+    site_url = os.getenv("SITE_URL", "https://dthenbk.duckdns.org:8444")
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # 1. Получаем статистику за текущий месяц
+            perf = await get_monthly_performance(session)
+            m_summary = perf.get("current_month_to_date") or perf.get("selected_month_summary") or {}
+
+            # Находим вчерашнюю ставку дня в календаре
+            days = perf.get("days", [])
+            yesterday_botd = next((d for d in days if d.get("date") == target_date), None)
+
+            # 2. Получаем Топ-3 ставки дня за вчера
+            top_bets = await calculate_daily_top_bets(session, date_str=target_date, status_filter="all")
+            top3 = [b for b in top_bets if getattr(b, 'daily_rank', 99) in [1, 2, 3]][:3]
+            if not top3 and top_bets:
+                top3 = top_bets[:3]
+
+            lines = [
+                f"📊 *ИТОГИ СТАВОК ЗА ВЧЕРА ({date_formatted_ru.upper()})* 📊\n"
+            ]
+
+            if yesterday_botd:
+                st = yesterday_botd.get("result_status", "upcoming")
+                if st == "win":
+                    badge = "✅ *ПРОШЛО*"
+                    p_txt = f"(+{yesterday_botd.get('profit', 0):.2f} флэт)"
+                elif st == "loss":
+                    badge = "❌ *НЕ ПРОШЛО*"
+                    p_txt = "(-1.00 флэт)"
+                elif st == "refund":
+                    badge = "🔄 *ВОЗВРАТ*"
+                    p_txt = "(0.00 флэт)"
+                else:
+                    badge = "⏳ *Ожидает расчета*"
+                    p_txt = ""
+
+                score_info = f" | Счёт: *{yesterday_botd.get('score')}*" if yesterday_botd.get("score") else ""
+                icon = yesterday_botd.get("sport_icon", "⚽")
+                league_info = f"🏆 Лига: _{yesterday_botd.get('league')}_" if yesterday_botd.get("league") else ""
+
+                lines.append("👑 *ГЛАВНАЯ СТАВКА ДНЯ:*")
+                lines.append(f"{icon} *{yesterday_botd.get('match_name')}*")
+                if league_info:
+                    lines.append(league_info)
+                lines.append(f"🎯 Исход: *{yesterday_botd.get('outcome')}* (кэф *{yesterday_botd.get('odds')}*){score_info}")
+                lines.append(f"Статус: {badge} {p_txt}\n")
+
+            # Другие топ-ставки дня, если есть
+            other_top = []
+            for b in top3:
+                # Пропускаем дубликат ставки дня
+                if yesterday_botd and yesterday_botd.get("match_name") and (
+                    yesterday_botd.get("home_team", "---") in b.match_name or 
+                    b.home_team in yesterday_botd.get("match_name", "")
+                ):
+                    continue
+                other_top.append(b)
+
+            if other_top:
+                lines.append("🥈 *ДРУГИЕ ТОП СТАВКИ ДНЯ:*")
+                for b in other_top:
+                    b_st = getattr(b, 'bet_result', None)
+                    if b_st == "win":
+                        b_badge = "✅ *ПРОШЛО*"
+                        b_p = f"(+{b.average_odds - 1.0:.2f} флэт)"
+                    elif b_st == "loss":
+                        b_badge = "❌ *НЕ ПРОШЛО*"
+                        b_p = "(-1.00 флэт)"
+                    elif b_st == "refund":
+                        b_badge = "🔄 *ВОЗВРАТ*"
+                        b_p = "(0.00 флэт)"
+                    else:
+                        b_badge = "⏳ *Завершён*" if b.status == "finished" else "⏳ *В игре*"
+                        b_p = ""
+
+                    score_str = f" | Счёт: *{b.final_score_home}:{b.final_score_away}*" if b.final_score_home is not None else ""
+                    lines.append(f"▪️ *{b.match_name}*")
+                    lines.append(f"   🎯 *{b.recommended_outcome}* (кэф *{b.average_odds}*){score_str}")
+                    lines.append(f"   Итог: {b_badge} {b_p}")
+                lines.append("")
+
+            # Блок статистики за месяц
+            cur_month_title = f"{month_names_nom.get(now.month, 'Текущий месяц')} {now.year}"
+            tot = m_summary.get("finished_bets", 0) + m_summary.get("upcoming_bets", 0)
+            if tot == 0:
+                tot = m_summary.get("total_bets", 0) or m_summary.get("total_days", 0)
+            w = m_summary.get("wins", 0)
+            l = m_summary.get("losses", 0)
+            r = m_summary.get("refunds", 0)
+            wr = m_summary.get("winrate", 0.0)
+            profit = m_summary.get("profit_units", 0.0)
+            roi = m_summary.get("roi", 0.0)
+            profit_sign = "+" if profit > 0 else ""
+
+            lines.append("───────────────────────")
+            lines.append(f"📈 *СТАТИСТИКА ЗА {cur_month_title.upper()}:*")
+            lines.append(f"▪️ Рассчитано ставок: *{w + l + r}* из {tot}")
+            lines.append(f"▪️ Прошло: *{w}* ✅  |  Мимо: *{l}* ❌" + (f"  |  Возврат: *{r}* 🔄" if r > 0 else ""))
+            lines.append(f"▪️ Проходимость (Winrate): *{wr}%* 🔥")
+            lines.append(f"▪️ Чистая прибыль: *{profit_sign}{profit:.2f} флэт* 💰")
+            lines.append(f"▪️ Доходность (ROI): *{'+' if roi > 0 else ''}{roi}%*")
+            lines.append("───────────────────────\n")
+            lines.append(f"👉 [Открыть детальный календарь и архив]({site_url})")
+
+            final_text = "\n".join(lines)
+            return send_telegram_message(final_text, chat_id=chat_id, reply_markup=MAIN_KEYBOARD)
+    except Exception as e:
+        logger.error(f"Ошибка формирования отчета о результатах: {e}", exc_info=True)
+        return False
+
 # ==========================================
 # 2. ИНТЕРАКТИВНЫЙ ОБРАБОТЧИК СООБЩЕНИЙ (POLLING)
 # ==========================================
@@ -392,23 +537,8 @@ async def handle_telegram_incoming_message(chat_id: int, text: str):
             send_telegram_message("\n".join(lines), chat_id=str(chat_id), reply_markup=MAIN_KEYBOARD)
         return
 
-    if text_clean in ["📊 Статистика архива", "/stats", "статистика", "архив"]:
-        from .settlement_service import get_performance_stats
-        async with AsyncSessionLocal() as session:
-            stats = await get_performance_stats(session)
-            o = stats.overview
-            msg = (
-                "📊 *ОБЩАЯ СТАТИСТИКА И ПРОФИТ СИСТЕМЫ* 📊\n\n"
-                f"📁 Всего рассчитано ставок: *{o.total_matches}*\n"
-                f"✅ Выиграло: *{o.wins}*\n"
-                f"❌ Проиграло: *{o.losses}*\n"
-                f"🔄 Возвратов: *{o.refunds}*\n\n"
-                f"🎯 *Винрейт (проходимость):* *{o.winrate_pct}%*\n"
-                f"💰 *Чистая прибыль (Units):* *{'+' if o.net_profit_units > 0 else ''}{o.net_profit_units} u*\n"
-                f"📈 *ROI системы:* *{'+' if o.roi_pct > 0 else ''}{o.roi_pct}%*\n\n"
-                f"👉 [Изучить детальный архив с календарем]({site_url})"
-            )
-            send_telegram_message(msg, chat_id=str(chat_id), reply_markup=MAIN_KEYBOARD)
+    if text_clean in ["📊 Итоги & Статистика", "📊 Статистика архива", "/stats", "/results", "/yesterday", "статистика", "итоги", "архив", "вчера", "результаты"]:
+        await send_yesterday_settlement_and_monthly_stats_report(chat_id=str(chat_id))
         return
 
     if text_clean in ["🌐 Открыть сайт", "/site", "сайт"]:
