@@ -193,6 +193,10 @@ class GoogleAuthRequest(BaseModel):
     credential: Optional[str] = None
     demo: Optional[bool] = False
 
+class TelegramAuthRequest(BaseModel):
+    init_data: Optional[str] = None
+    user: Optional[Dict[str, Any]] = None
+
 class UserResponse(BaseModel):
     id: int
     email: str

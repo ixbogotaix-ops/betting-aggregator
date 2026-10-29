@@ -1,14 +1,21 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { loginWithGoogle, loginWithDemo, getCurrentUser, logoutUser } from '../api';
+import { loginWithGoogle, loginWithDemo, loginWithTelegram, getCurrentUser, logoutUser } from '../api';
+import { initTelegramWebApp, getTelegramUser, isTelegramWebApp } from '../utils/telegram';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isTma, setIsTma] = useState(false);
 
   useEffect(() => {
     const initAuth = async () => {
+      // 1. Инициализируем Telegram Mini App SDK если открыто в Telegram
+      const tg = initTelegramWebApp();
+      const inTelegram = isTelegramWebApp();
+      setIsTma(inTelegram);
+
       const storedToken = localStorage.getItem('auth_token');
       const storedUser = localStorage.getItem('auth_user');
       
@@ -20,6 +27,24 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
+      // 2. Если запущено внутри Telegram — моментальная бесшовная авторизация профиля Telegram
+      if (inTelegram && tg) {
+        const tgUser = getTelegramUser();
+        if (tgUser) {
+          try {
+            const authRes = await loginWithTelegram(tg.initData, tgUser);
+            if (authRes?.user) {
+              setUser(authRes.user);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn("Telegram auto-login failed:", e);
+          }
+        }
+      }
+
+      // 3. Стандартная сессия для веб-браузеров
       if (storedToken) {
         try {
           const freshUser = await getCurrentUser();
@@ -74,6 +99,7 @@ export const AuthProvider = ({ children }) => {
         loginDemo: handleDemoLogin,
         logout: handleLogout,
         isLoggedIn: !!user,
+        isTma,
       }}
     >
       {children}

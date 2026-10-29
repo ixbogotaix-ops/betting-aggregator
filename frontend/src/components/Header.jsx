@@ -4,6 +4,7 @@ import {
   CalendarDays, CheckCircle2, ChevronRight, Activity, Calculator
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { triggerHaptic } from '../utils/telegram';
 import AuthModal from './AuthModal';
 import UserMenu from './UserMenu';
 import BankrollCalculatorModal from './BankrollCalculatorModal';
@@ -102,7 +103,10 @@ const Header = ({
           
           {/* ФУТУРИСТИЧЕСКИЙ КИБЕР-ЛОГОТИП */}
           <div 
-            onClick={() => setActiveTab('botd')}
+            onClick={() => {
+              triggerHaptic('light');
+              setActiveTab('botd');
+            }}
             className="flex items-center gap-3 cursor-pointer group select-none shrink-0"
           >
             <div className="relative flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-[1.5px] shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 group-hover:scale-105 transition-all">
@@ -189,7 +193,10 @@ const Header = ({
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setActiveTab(tab.id);
+                  }}
                   className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0 ${
                     isActive
                       ? `${tab.activeStyle} scale-[1.02]`

@@ -92,7 +92,7 @@ export default function UserMenu() {
                 </p>
                 <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-400 font-medium">
                   <CheckCircle2 className="w-3 h-3" />
-                  <span>Google авторизован</span>
+                  <span>{user.auth_provider === 'telegram' ? 'Telegram профиль' : 'Google авторизован'}</span>
                 </div>
               </div>
             </div>

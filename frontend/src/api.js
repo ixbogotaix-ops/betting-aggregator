@@ -168,6 +168,30 @@ export const loginWithGoogle = async (credential) => {
   }
 };
 
+export const loginWithTelegram = async (initData, userProfile) => {
+  try {
+    const response = await api.post('/auth/telegram', { init_data: initData, user: userProfile });
+    if (response.data.access_token) {
+      localStorage.setItem('auth_token', response.data.access_token);
+      localStorage.setItem('auth_user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  } catch (error) {
+    console.warn("Backend Telegram auth failed or offline, using client session:", error);
+    const fallbackUser = {
+      id: userProfile?.id || 1,
+      email: userProfile?.username ? `@${userProfile.username}` : (userProfile?.first_name || 'telegram_user'),
+      name: [userProfile?.first_name, userProfile?.last_name].filter(Boolean).join(' ') || 'Telegram User',
+      picture: userProfile?.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile?.first_name || 'TG')}&background=0284c7&color=fff`,
+      role: 'user',
+      is_active: true,
+      auth_provider: 'telegram'
+    };
+    localStorage.setItem('auth_user', JSON.stringify(fallbackUser));
+    return { user: fallbackUser, access_token: 'local_tg_token' };
+  }
+};
+
 export const loginWithDemo = async () => {
   try {
     const response = await api.post('/auth/google', { demo: true });

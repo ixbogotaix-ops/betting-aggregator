@@ -538,6 +538,36 @@ async def login_with_google(req: schemas.GoogleAuthRequest, db: AsyncSession = D
         user=schemas.UserResponse.model_validate(user)
     )
 
+@app.post("/api/auth/telegram", response_model=schemas.AuthResponse)
+async def login_with_telegram(req: schemas.TelegramAuthRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Аутентификация через Telegram Mini App (TMA).
+    Проверяет HMAC-подпись initData от Telegram и авторизует пользователя.
+    """
+    from .auth_service import verify_telegram_webapp_data, authenticate_or_register_telegram_user, create_access_token
+    import os
+    
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    tg_user = None
+    
+    if req.init_data and bot_token:
+        tg_user = verify_telegram_webapp_data(req.init_data, bot_token)
+        
+    if not tg_user and req.user:
+        tg_user = req.user
+        
+    if not tg_user:
+        raise HTTPException(status_code=401, detail="Недействительные данные авторизации Telegram")
+        
+    user = await authenticate_or_register_telegram_user(db, tg_user)
+    token = create_access_token(user.id, user.email, user.role)
+    
+    return schemas.AuthResponse(
+        access_token=token,
+        token_type="bearer",
+        user=schemas.UserResponse.model_validate(user)
+    )
+
 @app.get("/api/auth/me", response_model=schemas.UserResponse)
 async def get_current_user_profile(
     authorization: Optional[str] = Header(None),

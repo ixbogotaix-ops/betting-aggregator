@@ -12,12 +12,16 @@ logger = logging.getLogger(__name__)
 _NOTIFIED_SUPER_CONSENSUS_IDS = set()
 _NOTIFIED_TRIPLE_AI_IDS = set()
 
+# URL для Telegram Mini App (TMA)
+WEB_APP_URL = os.getenv("SITE_URL", "https://dthenbk.duckdns.org:8444")
+
 # Основное интерактивное меню кнопок в Telegram
 MAIN_KEYBOARD = {
     "keyboard": [
+        [{"text": "🚀 Открыть Neurobet App", "web_app": {"url": WEB_APP_URL}}],
         [{"text": "🏆 Ставка дня"}, {"text": "🤖 Топ ИИ (3/3)"}],
         [{"text": "⚡ Экспресс дня"}, {"text": "📊 Итоги & Статистика"}],
-        [{"text": "🌐 Открыть сайт"}]
+        [{"text": "🌐 Сайт в браузере"}]
     ],
     "resize_keyboard": True,
     "is_persistent": True
@@ -439,14 +443,34 @@ async def handle_telegram_incoming_message(chat_id: int, text: str):
 
     if text_clean in ["/start", "/help", "старт", "привет"]:
         welcome_text = (
-            "👋 *Добро пожаловать в AI Sports Aggregator!* 🤖\n\n"
-            "Я официальный бот платформы спортивной аналитики и прогнозов. Объединяю:\n"
-            "▫️ Прогнозы ведущих капперов рунета (7 источников)\n"
-            "▫️ Математический Тройной ИИ (*Робобет + Vitibet + Zulubet*)\n"
-            "▫️ Алгоритмические экспрессы с расчетом вероятностей\n\n"
-            "🎯 *Выберите нужный раздел в меню ниже:* 👇"
+            "👋 *Добро пожаловать в NEUROBET AI 2.0!* 🤖\n\n"
+            "Официальная платформа спортивной нейроаналитики и смарт-консенсуса.\n\n"
+            "▫️ *Прогнозы ведущих капперов рунета* (7 независимых источников)\n"
+            "▫️ *Математический Тройной ИИ* (Робобет + Vitibet + Zulubet)\n"
+            "▫️ *Алгоритмические экспрессы* (+EV перевес и готовые купоны)\n"
+            "▫️ *Официальные эмблемы и верифицированный трек-рекорд*\n\n"
+            "🚀 *Запустите Mini App прямо в Telegram* кнопкой ниже или выберите раздел меню: 👇"
         )
-        send_telegram_message(welcome_text, chat_id=str(chat_id), reply_markup=MAIN_KEYBOARD)
+        inline_kb = {
+            "inline_keyboard": [
+                [{"text": "🚀 Открыть Neurobet App", "web_app": {"url": site_url}}],
+                [{"text": "🌐 Открыть в браузере", "url": "http://45.84.222.76"}]
+            ]
+        }
+        send_telegram_message(welcome_text, chat_id=str(chat_id), reply_markup=inline_kb)
+        return
+
+    if text_clean in ["/app", "/webapp", "🚀 Открыть Neurobet App", "приложение", "мини апп"]:
+        msg = (
+            "🚀 *NEUROBET AI 2.0 — Telegram Mini App*\n\n"
+            "Сайт оптимизирован для работы прямо внутри Telegram! Нажмите кнопку ниже, чтобы запустить приложение во весь экран без перехода в браузер: 👇"
+        )
+        inline_kb = {
+            "inline_keyboard": [
+                [{"text": "🚀 Запустить приложение", "web_app": {"url": site_url}}]
+            ]
+        }
+        send_telegram_message(msg, chat_id=str(chat_id), reply_markup=inline_kb)
         return
 
     from .database import AsyncSessionLocal
@@ -569,6 +593,25 @@ async def start_telegram_polling():
         return
 
     logger.info("Telegram Bot Long Polling успешно запущен!")
+    
+    # Автоматическая настройка кнопки Menu как Telegram WebApp
+    site_url = os.getenv("SITE_URL", WEB_APP_URL)
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{bot_token}/setChatMenuButton",
+            json={
+                "menu_button": {
+                    "type": "web_app",
+                    "text": "Neurobet App 🚀",
+                    "web_app": {"url": site_url}
+                }
+            },
+            timeout=10
+        )
+        logger.info("Кнопка Menu в Telegram успешно сконфигурирована как WebApp.")
+    except Exception as e:
+        logger.warning(f"Ошибка настройки кнопки меню Telegram WebApp: {e}")
+
     offset = 0
 
     while True:

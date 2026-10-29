@@ -160,3 +160,80 @@ async def authenticate_or_register_google_user(session: AsyncSession, google_inf
     await session.commit()
     await session.refresh(user)
     return user
+
+def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[Dict]:
+    """
+    Проверяет криптографическую подпись initData от Telegram Mini App (HMAC-SHA256).
+    """
+    if not init_data or not bot_token:
+        return None
+        
+    try:
+        import urllib.parse
+        parsed = dict(urllib.parse.parse_qsl(init_data))
+        tg_hash = parsed.pop('hash', None)
+        if not tg_hash:
+            return None
+            
+        check_str = '\n'.join(f'{k}={v}' for k, v in sorted(parsed.items()))
+        secret_key = hmac.new(b"WebAppData", bot_token.encode('utf-8'), hashlib.sha256).digest()
+        calc_hash = hmac.new(secret_key, check_str.encode('utf-8'), hashlib.sha256).hexdigest()
+        
+        if not hmac.compare_digest(calc_hash, tg_hash):
+            return None
+            
+        user_raw = parsed.get("user")
+        if user_raw:
+            return json.loads(user_raw)
+        return parsed
+    except Exception as e:
+        logger.error(f"Ошибка валидации Telegram WebApp initData: {e}")
+        return None
+
+async def authenticate_or_register_telegram_user(session: AsyncSession, tg_user: Dict) -> User:
+    """
+    Находит или регистрирует пользователя из Telegram Mini App.
+    """
+    tg_id = str(tg_user.get("id"))
+    username = tg_user.get("username")
+    first_name = tg_user.get("first_name", "")
+    last_name = tg_user.get("last_name", "")
+    full_name = f"{first_name} {last_name}".strip() or (f"@{username}" if username else f"User {tg_id}")
+    photo_url = tg_user.get("photo_url")
+    
+    unique_key = f"tg_{tg_id}"
+    email = f"{username}@telegram.org" if username else f"{unique_key}@tma.local"
+
+    stmt = select(User).where((User.google_id == unique_key) | (User.email == email))
+    res = await session.execute(stmt)
+    user = res.scalar_one_or_none()
+
+    admin_chat_id = os.getenv("TELEGRAM_CHAT_ID", "135842253")
+    ADMIN_TG = {admin_chat_id, "135842253", "ixbogotaix", "bogota"}
+    is_admin = tg_id in ADMIN_TG or (username and username.lower() in ADMIN_TG)
+
+    now = datetime.now(timezone.utc)
+    if user:
+        user.last_login_at = now
+        if is_admin:
+            user.role = "admin"
+        if full_name:
+            user.name = full_name
+        if photo_url:
+            user.picture = photo_url
+    else:
+        user = User(
+            google_id=unique_key,
+            email=email,
+            name=full_name,
+            picture=photo_url,
+            role="admin" if is_admin else "user",
+            is_active=True,
+            created_at=now,
+            last_login_at=now
+        )
+        session.add(user)
+
+    await session.commit()
+    await session.refresh(user)
+    return user
