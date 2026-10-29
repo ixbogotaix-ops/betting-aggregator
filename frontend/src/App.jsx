@@ -269,59 +269,58 @@ function App() {
               </aside>
 
               {/* ПРАВАЯ ЧАСТЬ: СТАВКИ ДНЯ СЕГОДНЯ, ЭКСПРЕССЫ И КАНДИДАТЫ */}
-              <div className="flex-1 min-w-0 space-y-8 w-full">
+              <div className="flex-1 min-w-0 space-y-6 w-full">
                 {/* Баннер Экспресса Дня */}
                 <div 
                   onClick={() => setActiveTab('parlays')}
-                className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-orange-950/30 to-purple-950/30 border border-orange-500/30 hover:border-orange-500/60 transition-all cursor-pointer flex items-center justify-between gap-4 group shadow-lg"
-              >
-                <div className="flex items-center gap-3.5">
-                  <div className="p-2.5 bg-orange-500/20 text-orange-400 rounded-xl group-hover:scale-110 transition-transform">
-                    <Zap className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm sm:text-base">Сформирован Экспресс Дня от ИИ</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-500/20 text-orange-300 border border-orange-500/30 animate-pulse">
-                        HOT
-                      </span>
+                  className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-950/40 via-orange-950/30 to-purple-950/30 border border-orange-500/30 hover:border-orange-500/60 transition-all cursor-pointer flex items-center justify-between gap-3 group shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-orange-500/20 text-orange-400 rounded-lg group-hover:scale-105 transition-transform">
+                      <Zap className="w-4 h-4" />
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Готовые купоны: 🛡️ Надёжный и 🚀 Огненный с калькулятором выигрыша
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs sm:text-sm">Экспресс Дня от ИИ</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-orange-500/20 text-orange-300 border border-orange-500/30 animate-pulse">
+                          HOT
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        Готовые купоны: 🛡️ Надёжный и 🚀 Огненный с калькулятором выигрыша
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-orange-400 font-bold text-xs group-hover:translate-x-1 transition-transform shrink-0">
+                    <span>Купоны</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div className="flex items-center gap-1 text-orange-400 font-bold text-xs sm:text-sm group-hover:translate-x-1 transition-transform shrink-0">
-                  <span>Открыть купон</span>
-                  <ArrowRight className="w-4 h-4" />
-                </div>
-              </div>
 
-              {/* БЛОК 1: ТОП-3 СТАВКИ ДНЯ (Строго 1 ставка дня!) */}
-              <section>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2.5">
-                      <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
-                      <span>Топ-3 Ставки Дня {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
-                    </h2>
-                    <p className="text-xs sm:text-sm text-gray-400 mt-1">
-                      Три лучших зафиксированных матча за день: 👑 <strong>Ставка Дня</strong> (главный фаворит консенсуса) + Топ-2 и Топ-3
-                    </p>
+                {/* БЛОК 1: ТОП-3 СТАВКИ ДНЯ (Строго 1 ставка дня!) */}
+                <section>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2 font-heading tracking-tight">
+                        <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
+                        <span>Топ-3 Ставки Дня {currentSport !== 'All' ? `• ${activeSportLabel}` : ''}</span>
+                      </h2>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        👑 <strong>Ставка Дня</strong> (главный фаворит) + Топ-2 и Топ-3
+                      </p>
+                    </div>
+
+                    {topBets.length > 0 && (
+                      <button 
+                        onClick={handleAiAnalysis}
+                        disabled={isAiLoading}
+                        className="group relative flex items-center gap-1.5 bg-gradient-to-r from-blue-600 via-accent to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2 rounded-xl font-bold text-xs transition-all disabled:opacity-50 overflow-hidden shadow-md shadow-blue-500/20 shrink-0"
+                      >
+                        <Bot className={`w-4 h-4 ${isAiLoading ? 'animate-bounce' : ''}`} />
+                        <span>{isAiLoading ? 'Нейросеть думает...' : 'Супер-Анализ 🚀'}</span>
+                      </button>
+                    )}
                   </div>
-
-                  {topBets.length > 0 && (
-                    <button 
-                      onClick={handleAiAnalysis}
-                      disabled={isAiLoading}
-                      className="group relative flex items-center gap-2 bg-gradient-to-r from-blue-600 via-accent to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm transition-all disabled:opacity-50 overflow-hidden shadow-lg shadow-blue-500/25 shrink-0"
-                    >
-                      <div className="absolute inset-0 w-full h-full bg-white/20 group-hover:scale-x-100 scale-x-0 origin-left transition-transform duration-300"></div>
-                      <Bot className={`w-5 h-5 relative z-10 ${isAiLoading ? 'animate-bounce' : ''}`} />
-                      <span className="relative z-10">{isAiLoading ? 'Нейросеть думает...' : 'Получить Супер-Анализ 🚀'}</span>
-                    </button>
-                  )}
-                </div>
 
                 {/* Инсайт нейросети */}
                 {aiVerdict && (

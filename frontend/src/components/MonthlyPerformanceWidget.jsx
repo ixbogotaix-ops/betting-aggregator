@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getMonthlyPerformance } from '../api';
 import { toRussianTeam } from '../utils/russianNames';
+import { formatCompactOutcome } from './TopBetCard';
 
 export default function MonthlyPerformanceWidget({ todayBotd = null, todayRobobet = null }) {
   const [data, setData] = useState(null);
@@ -105,16 +106,16 @@ export default function MonthlyPerformanceWidget({ todayBotd = null, todayRobobe
             <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-black font-heading text-white tracking-tight flex items-center gap-1.5">
-              <span>Трек-рекорд по дням</span>
+            <h3 className="text-xs sm:text-sm font-extrabold font-heading text-white tracking-tight flex items-center gap-1.5">
+              <span>Трек-рекорд</span>
               {is_current_month && (
-                <span className="px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full animate-pulse">
+                <span className="px-1.5 py-0.2 text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full animate-pulse">
                   Live
                 </span>
               )}
             </h3>
-            <p className="text-[11px] text-gray-400">
-              Строго 1 главная ставка на каждый день
+            <p className="text-[10px] text-gray-400">
+              1 главная ставка в день
             </p>
           </div>
         </div>
@@ -391,25 +392,28 @@ export default function MonthlyPerformanceWidget({ todayBotd = null, todayRobobe
                 </div>
 
                 {/* Нижняя строчка: Исход, Кэф, Счет */}
-                <div className="flex items-center justify-between text-[11px] text-gray-400 mt-1 pt-1 border-t border-gray-800/60">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-black text-blue-300 bg-blue-500/15 px-1.5 py-0.2 rounded">
-                      {outcome}
+                <div className="flex items-center justify-between text-[11px] text-gray-400 mt-1.5 pt-1.5 border-t border-gray-800/60 gap-1">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <span 
+                      className="font-bold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] truncate max-w-[130px] shrink"
+                      title={outcome}
+                    >
+                      {formatCompactOutcome(outcome, item.home_team, item.away_team)}
                     </span>
-                    <span className="font-semibold text-gray-300">
-                      кэф {odds}
+                    <span className="font-mono text-gray-300 font-semibold shrink-0 text-[10px]">
+                      {odds}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {score && (
-                      <span className="font-black text-gray-200 bg-gray-800/80 px-1.5 py-0.2 rounded text-[11px]">
+                      <span className="font-mono font-bold text-gray-200 bg-gray-800/90 border border-gray-700/60 px-1.5 py-0.2 rounded text-[10px]">
                         {score}
                       </span>
                     )}
                     {!isUpcoming && (
-                      <span className={`font-bold text-[10px] ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {profit >= 0 ? `+${profit}` : profit} флэт
+                      <span className={`font-mono font-bold text-[10px] ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {profit >= 0 ? `+${profit}` : profit}u
                       </span>
                     )}
                   </div>

@@ -93,21 +93,21 @@ const TeamBadge = ({ teamName = '', logoUrl = '', size = 'md', className = '' })
   const effectiveLogoUrl = isPrimaryValid ? logoUrl : (!fallbackError && fallbackUrl ? fallbackUrl : null);
   const isValidLogo = Boolean(effectiveLogoUrl);
 
-  // Размеры контейнера (крупные, заметные и сочные)
+  // Размеры контейнера (гармоничные и строго фиксированные квадраты)
   const sizeClasses = {
-    xs: 'w-7 h-7 min-w-[28px] text-[10px] rounded-lg p-0.5',
-    sm: 'w-10 h-10 min-w-[40px] text-xs rounded-xl p-1',
-    md: 'w-13 h-13 min-w-[52px] text-sm rounded-2xl p-1.5',
-    lg: 'w-16 h-16 min-w-[64px] text-base rounded-2xl p-2',
-    xl: 'w-20 h-20 min-w-[80px] text-lg rounded-3xl p-2.5',
-  }[size] || 'w-13 h-13 rounded-2xl p-1.5';
+    xs: 'w-[28px] h-[28px] min-w-[28px] max-w-[28px] min-h-[28px] max-h-[28px] text-[10px] rounded-lg p-0.5',
+    sm: 'w-[36px] h-[36px] min-w-[36px] max-w-[36px] min-h-[36px] max-h-[36px] text-xs rounded-xl p-1',
+    md: 'w-[44px] h-[44px] min-w-[44px] max-w-[44px] min-h-[44px] max-h-[44px] text-xs rounded-xl p-1',
+    lg: 'w-[56px] h-[56px] min-w-[56px] max-w-[56px] min-h-[56px] max-h-[56px] text-sm rounded-2xl p-1.5',
+    xl: 'w-[64px] h-[64px] min-w-[64px] max-w-[64px] min-h-[64px] max-h-[64px] text-base rounded-2xl p-2',
+  }[size] || 'w-[44px] h-[44px] min-w-[44px] max-w-[44px] min-h-[44px] max-h-[44px] rounded-xl p-1';
 
   const initials = getInitials(teamName);
   const gradientClass = BADGE_GRADIENTS[getGradientIndex(teamName)];
 
   return (
     <div 
-      className={`relative flex items-center justify-center bg-gray-950/85 ring-1 ring-gray-700/80 shadow-2xl shrink-0 overflow-hidden select-none transition-all duration-300 group-hover:scale-105 group-hover:ring-blue-500/60 ${sizeClasses} ${className}`}
+      className={`relative aspect-square flex items-center justify-center bg-gray-950/85 ring-1 ring-gray-700/80 shadow-2xl shrink-0 overflow-hidden select-none transition-all duration-300 group-hover:scale-105 group-hover:ring-blue-500/60 ${sizeClasses} ${className}`}
       title={teamName}
     >
       {isValidLogo ? (

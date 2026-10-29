@@ -177,48 +177,6 @@ const Header = ({
           />
         </div>
       </div>
-              <span className="text-[10px] font-semibold text-gray-400 tracking-wide mt-1 hidden sm:block">
-                Спортивная нейроаналитика & Консенсус капперов
-              </span>
-            </div>
-          </div>
-
-          {/* ПРАВАЯ ПАНЕЛЬ СТАТУСА: Часы, Парсеры, Профиль */}
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            {/* Кнопка Мониторинга Источников */}
-            <button
-              onClick={onOpenSources}
-              title="Мониторинг парсеров и капперов"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold transition-all shadow-sm active:scale-95 group"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-              </span>
-              <span className="hidden sm:inline">6 парсеров онлайн</span>
-              <span className="sm:hidden">Парсеры</span>
-            </button>
-
-            <MoscowClock />
-
-            {isLoggedIn ? (
-              <UserMenu />
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs sm:text-sm shadow-md shadow-blue-500/25 transition-all active:scale-95"
-              >
-                <span>Войти</span>
-              </button>
-            )}
-          </div>
-
-          <AuthModal
-            isOpen={isAuthModalOpen}
-            onClose={() => setIsAuthModalOpen(false)}
-          />
-        </div>
-      </div>
 
       {/* ТИР 2: ВСТРОЕННАЯ НАВИГАЦИЯ ПО РАЗДЕЛАМ (ЕДИНАЯ СТИЛЬНАЯ СТРОКА) */}
       <div className="border-t border-white/[0.06] bg-black/30">
