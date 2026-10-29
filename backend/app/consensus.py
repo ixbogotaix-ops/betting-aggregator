@@ -633,7 +633,7 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
     top_bets = []
 
     for match in matches:
-        if not match.predictions:
+        if not match.predictions or (match.league and 'mock' in match.league.lower()) or match.id == 274:
             continue
 
         gen_sport = get_generic_sport(match.sport_type)
@@ -852,6 +852,8 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 time_diff_sec = (now_moscow - match.match_date).total_seconds()
                 if 0 <= time_diff_sec <= 135 * 60:
                     m_status_str = "live"
+                elif time_diff_sec > 135 * 60:
+                    m_status_str = "finished"
                 else:
                     m_status_str = "upcoming"
             else:
@@ -904,13 +906,36 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
     # Чтобы главная Ставка Дня и Топ-3 оставались зафиксированными на весь день,
     # не менялись и не исчезали после финального свистка!
     target_date_str = (target_date if (date_str and date_str != "ALL") else now_moscow).strftime("%Y-%m-%d")
-    locked_ids = get_daily_top3_lock(target_date_str)
-    if not locked_ids and status_filter != "finished":
-        # Если для даты ещё нет фиксации, берём первые 3 ставки с кэфом >= 1.55
-        qualifying = [b for b in top_bets if (b.average_odds or 0.0) >= 1.55]
-        if qualifying:
-            locked_ids = [b.match_id for b in qualifying[:3]]
-            save_daily_top3_lock(target_date_str, locked_ids)
+    locked_ids = get_daily_top3_lock(target_date_str) or []
+
+    # Очищаем locked_ids от удаленных и фейковых матчей (id 274 и т.д.)
+    valid_locked_ids = [m_id for m_id in locked_ids if m_id != 274 and any(b.match_id == m_id for b in top_bets)]
+    
+    # Проверяем, нужно ли обновить фиксацию:
+    # 1. Если фиксации не было вообще
+    # 2. Если в фиксации были удаленные/фейковые матчи
+    # 3. Если текущие зафиксированные матчи слабые (score < 15 или 1 каппер), а в течение дня появились мощные матчи с консенсусом 3+ капперов
+    qualifying = [b for b in top_bets if (b.average_odds or 0.0) >= 1.55 and b.match_id != 274]
+    needs_reselection = False
+
+    if not valid_locked_ids and status_filter != "finished":
+        needs_reselection = True
+    elif len(valid_locked_ids) < 3 and len(qualifying) >= 3 and status_filter != "finished":
+        needs_reselection = True
+    elif valid_locked_ids and qualifying and status_filter != "finished":
+        by_id = {b.match_id: b for b in top_bets}
+        current_best_score = max((by_id[m].confidence_score for m in valid_locked_ids if m in by_id), default=0)
+        top_available_score = qualifying[0].confidence_score if qualifying else 0
+        top_pred_count = len(qualifying[0].all_predictions or []) if qualifying else 0
+        # Если появился матч с очевидным перевесом консенсуса (3+ мнений и скор на 50% выше), обновляем
+        if top_available_score > current_best_score * 1.5 and top_pred_count >= 3:
+            needs_reselection = True
+
+    if needs_reselection and qualifying:
+        valid_locked_ids = [b.match_id for b in qualifying[:3]]
+        save_daily_top3_lock(target_date_str, valid_locked_ids)
+
+    locked_ids = valid_locked_ids
 
     # Если для даты зафиксированы ID матчей, строго выстраиваем их в Топ-3:
     if locked_ids:

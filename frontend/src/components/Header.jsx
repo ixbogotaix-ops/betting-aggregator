@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Zap, Trophy, Clock, Radio, Sparkles, Bot, Flame, 
-  CalendarDays, CheckCircle2, ChevronRight, Activity 
+  CalendarDays, CheckCircle2, ChevronRight, Activity, Calculator
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AuthModal from './AuthModal';
 import UserMenu from './UserMenu';
+import BankrollCalculatorModal from './BankrollCalculatorModal';
 
 const MoscowClock = () => {
   const [time, setTime] = useState(new Date());
@@ -41,6 +42,7 @@ const Header = ({
 }) => {
   const { isLoggedIn } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isCalcOpen, setIsCalcOpen] = useState(false);
 
   const navTabs = [
     {
@@ -118,6 +120,63 @@ const Header = ({
                   AI 2.0
                 </span>
               </div>
+              <span className="text-[10px] font-semibold text-gray-400 tracking-wide mt-1 hidden sm:block">
+                Спортивная нейроаналитика & Консенсус капперов
+              </span>
+            </div>
+          </div>
+
+          {/* ПРАВАЯ ПАНЕЛЬ СТАТУСА: Калькулятор, Парсеры, Часы, Профиль */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Кнопка Калькулятора Банка / Флэта */}
+            <button
+              onClick={() => setIsCalcOpen(true)}
+              title="Калькулятор банка и размера флэта"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 hover:text-white text-xs font-bold transition-all shadow-sm active:scale-95 group"
+            >
+              <Calculator className="w-3.5 h-3.5 text-cyan-400 group-hover:rotate-12 transition-transform" />
+              <span className="hidden md:inline">Калькулятор</span>
+            </button>
+
+            {/* Кнопка Мониторинга Источников */}
+            <button
+              onClick={onOpenSources}
+              title="Мониторинг парсеров и капперов"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold transition-all shadow-sm active:scale-95 group"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              </span>
+              <span className="hidden sm:inline">6 парсеров онлайн</span>
+              <span className="sm:hidden">Парсеры</span>
+            </button>
+
+            <MoscowClock />
+
+            {isLoggedIn ? (
+              <UserMenu />
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs sm:text-sm shadow-md shadow-blue-500/25 transition-all active:scale-95"
+              >
+                <span>Войти</span>
+              </button>
+            )}
+          </div>
+
+          <AuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+          />
+
+          <BankrollCalculatorModal 
+            isOpen={isCalcOpen}
+            onClose={() => setIsCalcOpen(false)}
+          />
+        </div>
+      </div>
               <span className="text-[10px] font-semibold text-gray-400 tracking-wide mt-1 hidden sm:block">
                 Спортивная нейроаналитика & Консенсус капперов
               </span>
