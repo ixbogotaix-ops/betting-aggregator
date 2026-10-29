@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Target, TrendingUp, Users, Shield, Sparkles, ChevronRight, 
-  Clock, MessageSquare, Flame, Radio 
+  Clock, MessageSquare, Flame, Radio, CheckCircle2 
 } from 'lucide-react';
 import MatchDetailModal from './MatchDetailModal';
 import TeamBadge from './TeamBadge';
@@ -613,8 +613,8 @@ const TopBetCard = ({ bet }) => {
   };
 
   const hasScore = bet.final_score_home !== null && bet.final_score_away !== null;
-  const isFinished = hasScore || (bet.status === 'finished' && bet.bet_result !== null);
-  const isLive = !isFinished && (isMatchLive() || bet.status === 'live' || bet.status === 'in_progress');
+  const isFinished = bet.status === 'finished' || hasScore || (bet.bet_result !== null);
+  const isLive = !isFinished && (bet.status === 'live' || bet.status === 'in_progress' || isMatchLive());
 
   const sourcesList = (bet.supporting_sources || []).map(s => {
     return s.replace(/\s*\(Рейтинг:.*?\)/g, '').trim();
@@ -667,20 +667,33 @@ const TopBetCard = ({ bet }) => {
 
             {/* Аккуратная плашка времени по Москве, LIVE или ЗАВЕРШЁН */}
             {isLive ? (
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-950/80 rounded-lg border border-red-500/50 text-[10px] font-black text-red-200 shrink-0 animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-red-950/90 rounded-lg border border-red-500/60 text-[10px] font-black text-red-200 shadow-md shadow-red-900/30 shrink-0 animate-pulse">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
                 <span className="font-extrabold uppercase tracking-wider text-red-300">LIVE</span>
+                {bet.live_minute ? (
+                  <span className="font-mono text-white bg-red-800/80 px-1 py-0.2 rounded text-[10px] font-bold">
+                    {bet.live_minute}
+                  </span>
+                ) : null}
               </div>
             ) : isFinished ? (
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-950/90 rounded-lg border border-gray-700/80 text-[10px] font-bold text-gray-300 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-950/40 rounded-lg border border-emerald-500/40 text-[10px] font-bold text-emerald-300 shrink-0 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 <span className="font-mono text-gray-300">{mskTime.timeStr}</span>
-                <span className="text-[9px] text-emerald-400 font-extrabold uppercase">ФИНАЛ</span>
+                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-wider">ФИНАЛ</span>
               </div>
             ) : bet.match_date ? (
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-950/90 rounded-lg border border-gray-700/80 text-[10px] font-bold text-gray-300 shrink-0 font-mono">
-                <Clock className="w-3 h-3 text-blue-400" />
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-950/90 rounded-lg border border-gray-700/80 text-[10px] font-bold text-gray-300 shrink-0 font-mono shadow-inner">
+                <Clock className="w-3 h-3 text-cyan-400" />
                 <span>{mskTime.dateStr}, {mskTime.timeStr}</span>
+                {bet.countdown_text && (
+                  <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/30">
+                    {bet.countdown_text}
+                  </span>
+                )}
               </div>
             ) : null}
           </div>
@@ -714,15 +727,26 @@ const TopBetCard = ({ bet }) => {
             <div className="flex flex-col items-center justify-center px-1">
               {bet.final_score_home !== null && bet.final_score_away !== null ? (
                 <div className="flex flex-col items-center">
-                  <div className="px-2 py-0.5 rounded-lg bg-gray-800 border border-gray-600 font-bold text-xs text-white shadow font-mono">
-                    {bet.final_score_home}:{bet.final_score_away}
+                  <div className={`px-2.5 py-1 rounded-xl border font-black text-sm shadow-lg font-mono tracking-wider ${
+                    isLive 
+                      ? 'bg-red-950/90 border-red-500/60 text-white shadow-red-900/30 animate-pulse' 
+                      : 'bg-gradient-to-b from-gray-800 to-gray-900 border-gray-600 text-white'
+                  }`}>
+                    {bet.final_score_home} : {bet.final_score_away}
                   </div>
-                  <span className="text-[8px] font-extrabold text-emerald-400 uppercase tracking-wider mt-0.5">СЧЁТ</span>
+                  <span className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${isLive ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {isLive ? (bet.live_minute || 'В ИГРЕ') : 'ИТОГ'}
+                  </span>
                 </div>
               ) : isLive ? (
-                <span className="w-7 h-7 rounded-full bg-red-950 border border-red-500/50 flex items-center justify-center text-[9px] font-black text-red-300 shadow-md shadow-red-500/20 animate-pulse">
-                  LIVE
-                </span>
+                <div className="flex flex-col items-center">
+                  <div className="px-2.5 py-1 rounded-xl bg-red-950/90 border border-red-500/60 text-xs font-black text-red-200 shadow-lg shadow-red-900/30 animate-pulse font-mono">
+                    {bet.live_minute || 'LIVE'}
+                  </div>
+                  <span className="text-[8px] font-black text-red-400 uppercase tracking-widest mt-0.5">
+                    {bet.live_status_text || 'ИДЁТ МАТЧ'}
+                  </span>
+                </div>
               ) : (
                 <span className="w-6 h-6 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[10px] font-black text-gray-400 italic font-heading">
                   VS
@@ -766,13 +790,15 @@ const TopBetCard = ({ bet }) => {
           {/* РЕКОМЕНДУЕМЫЙ ИСХОД И КЭФ */}
           <div className={`p-2.5 sm:p-3 bg-gradient-to-br ${
             bet.bet_result === 'win' 
-              ? 'from-emerald-950/40 via-gray-900 to-gray-900 border-emerald-500/50' 
+              ? 'from-emerald-950/50 via-gray-900 to-gray-900 border-emerald-500/60 ring-1 ring-emerald-500/20' 
               : bet.bet_result === 'loss' 
               ? 'from-rose-950/40 via-gray-900 to-gray-900 border-rose-500/50' 
               : bet.bet_result === 'refund' 
               ? 'from-amber-950/40 via-gray-900 to-gray-900 border-amber-500/50' 
+              : isLive
+              ? 'from-red-950/30 via-blue-950/20 to-gray-900 border-red-500/40'
               : 'from-blue-950/30 via-indigo-950/20 to-gray-900 border-blue-500/30'
-          } rounded-xl border mb-2 shadow-inner`}>
+          } rounded-xl border mb-2 shadow-inner transition-all`}>
             <div className="flex items-center justify-between gap-1.5 mb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1">
                 <Target className="w-3 h-3 text-blue-400" />
@@ -780,18 +806,23 @@ const TopBetCard = ({ bet }) => {
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
                 {bet.bet_result === 'win' && (
-                  <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold rounded">
-                    ✅ ЗАШЛА
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 text-[10px] font-black rounded-lg shadow-sm flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> ВЫИГРЫШ
                   </span>
                 )}
                 {bet.bet_result === 'loss' && (
-                  <span className="px-1.5 py-0.2 bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[9px] font-bold rounded">
+                  <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/50 text-[10px] font-black rounded-lg shadow-sm">
                     ❌ МИМО
                   </span>
                 )}
                 {bet.bet_result === 'refund' && (
-                  <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold rounded">
+                  <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-black rounded-lg shadow-sm">
                     🔄 ВОЗВРАТ
+                  </span>
+                )}
+                {isLive && !bet.bet_result && (
+                  <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 text-[10px] font-black rounded-lg shadow-sm animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping"></span> В ИГРЕ
                   </span>
                 )}
                 <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold text-xs rounded-md shadow-sm">

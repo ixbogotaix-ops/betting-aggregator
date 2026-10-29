@@ -97,6 +97,21 @@ function App() {
     return () => { isMounted = false; };
   }, [currentDate]);
 
+  // Фоновое авто-обновление счетов и Live-статусов без перезагрузки интерфейса каждые 60 секунд
+  useEffect(() => {
+    const liveInterval = setInterval(async () => {
+      try {
+        const betsData = await getTopBets('All', currentDate, 'all');
+        if (Array.isArray(betsData) && betsData.length > 0) {
+          setAllTopBets(betsData);
+        }
+      } catch (e) {
+        // quiet background refresh
+      }
+    }, 60000);
+    return () => clearInterval(liveInterval);
+  }, [currentDate]);
+
   // При смене спорта обновляем список расписания
   useEffect(() => {
     const updateMatches = async () => {

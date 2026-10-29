@@ -846,16 +846,60 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
             # Динамический статус матча: finished, live или upcoming
             # Матч считается ЗАВЕРШЁННЫМ только если в БД реально есть финальный счёт или подтвержденный результат!
             has_final_score = (match.final_score_home is not None and match.final_score_away is not None)
+            live_minute = None
+            live_status_text = None
+            countdown_text = None
+
             if has_final_score or (match.status == MatchStatus.finished and bet_res_val is not None):
                 m_status_str = "finished"
+                live_status_text = "Матч завершён"
             elif match.match_date:
                 time_diff_sec = (now_moscow - match.match_date).total_seconds()
                 if 0 <= time_diff_sec <= 135 * 60:
                     m_status_str = "live"
+                    sport_l = (match.sport_type or "").lower()
+                    if "foot" in sport_l or "футбол" in sport_l:
+                        if time_diff_sec < 45 * 60:
+                            mins = max(1, int(time_diff_sec // 60) + 1)
+                            live_minute = f"{mins}'"
+                            live_status_text = "1-й тайм"
+                        elif time_diff_sec < 60 * 60:
+                            live_minute = "HT"
+                            live_status_text = "Перерыв"
+                        elif time_diff_sec <= 105 * 60:
+                            mins = 45 + max(1, int((time_diff_sec - 60 * 60) // 60) + 1)
+                            live_minute = f"{mins}'"
+                            live_status_text = "2-й тайм"
+                        else:
+                            live_minute = "90+'"
+                            live_status_text = "Концовка матча"
+                    elif "hock" in sport_l or "хоккей" in sport_l:
+                        if time_diff_sec < 25 * 60:
+                            live_status_text = "1-й период"
+                        elif time_diff_sec < 40 * 60:
+                            live_status_text = "Перерыв"
+                        elif time_diff_sec < 65 * 60:
+                            live_status_text = "2-й период"
+                        elif time_diff_sec < 80 * 60:
+                            live_status_text = "Перерыв"
+                        else:
+                            live_status_text = "3-й период"
+                        live_minute = f"{max(1, int(time_diff_sec // 60))}'"
+                    else:
+                        live_minute = f"{max(1, int(time_diff_sec // 60))}'"
+                        live_status_text = "В игре"
                 elif time_diff_sec > 135 * 60:
                     m_status_str = "finished"
+                    live_status_text = "Матч завершён"
                 else:
                     m_status_str = "upcoming"
+                    sec_to_start = abs(time_diff_sec)
+                    if sec_to_start < 60 * 60:
+                        countdown_text = f"Через {max(1, int(sec_to_start // 60))}м"
+                    elif sec_to_start < 24 * 3600:
+                        hrs = int(sec_to_start // 3600)
+                        mins = int((sec_to_start % 3600) // 60)
+                        countdown_text = f"Через {hrs}ч {mins}м" if mins else f"Через {hrs}ч"
             else:
                 m_status_str = "upcoming"
 
@@ -896,6 +940,9 @@ async def calculate_daily_top_bets(session: AsyncSession, sport_type: str = None
                 final_score_away=match.final_score_away,
                 status=m_status_str,
                 bet_result=bet_res_val,
+                live_minute=live_minute,
+                live_status_text=live_status_text,
+                countdown_text=countdown_text,
                 all_predictions=detailed_preds
             ))
 

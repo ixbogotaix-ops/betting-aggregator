@@ -119,6 +119,9 @@ class TopBetResponse(BaseModel):
     final_score_away: Optional[int] = None
     status: Optional[str] = "upcoming"
     bet_result: Optional[str] = None
+    live_minute: Optional[str] = None
+    live_status_text: Optional[str] = None
+    countdown_text: Optional[str] = None
     daily_rank: Optional[int] = None
     slot_label: Optional[str] = None
     all_predictions: List[TopBetPredictionDetail] = []

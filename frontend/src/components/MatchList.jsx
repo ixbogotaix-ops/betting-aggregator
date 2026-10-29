@@ -28,16 +28,42 @@ const MatchList = ({ matches }) => {
             const awayRu = toRussianTeam(match.away_team);
             const leagueRu = toRussianLeague(match.league);
 
+            const hasScore = match.final_score_home !== null && match.final_score_away !== null;
+            const isMatchFinished = match.status === 'finished' || hasScore;
+            const isMatchLive = !isMatchFinished && (
+              match.status === 'live' || 
+              (() => {
+                try {
+                  const start = new Date(match.match_date).getTime();
+                  const now = Date.now();
+                  return now >= start && (now - start) < (2.5 * 3600 * 1000);
+                } catch (e) { return false; }
+              })()
+            );
+
             return (
               <tr key={match.id} className="hover:bg-gray-800/30 transition-colors group">
-                <td className="py-4 px-4 text-xs sm:text-sm text-gray-400 whitespace-nowrap font-mono">
-                  {new Date(match.match_date).toLocaleString('ru-RU', {
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    timeZone: 'Europe/Moscow'
-                  })}
+                <td className="py-4 px-4 text-xs sm:text-sm whitespace-nowrap font-mono">
+                  {isMatchLive ? (
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-red-950/80 border border-red-500/50 text-[10px] font-black text-red-300 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+                      <span>LIVE</span>
+                    </div>
+                  ) : isMatchFinished ? (
+                    <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                      ФИНАЛ
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">
+                      {new Date(match.match_date).toLocaleString('ru-RU', {
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        timeZone: 'Europe/Moscow'
+                      })}
+                    </span>
+                  )}
                 </td>
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-3">
@@ -50,9 +76,15 @@ const MatchList = ({ matches }) => {
                     </div>
                     
                     {/* Разделитель VS или счет */}
-                    {match.final_score_home !== null && match.final_score_away !== null ? (
-                      <span className="px-2.5 py-1 rounded-xl bg-gray-800 text-xs font-black text-emerald-400 border border-emerald-500/30 font-mono shadow-inner">
+                    {hasScore ? (
+                      <span className={`px-2.5 py-1 rounded-xl text-xs font-black font-mono shadow-inner border ${
+                        isMatchLive ? 'bg-red-950/90 text-white border-red-500/60 animate-pulse' : 'bg-gray-800 text-emerald-400 border-emerald-500/30'
+                      }`}>
                         {match.final_score_home}:{match.final_score_away}
+                      </span>
+                    ) : isMatchLive ? (
+                      <span className="px-2 py-0.5 rounded-lg bg-red-950/80 text-[10px] font-black text-red-300 border border-red-500/40 animate-pulse font-mono">
+                        LIVE
                       </span>
                     ) : (
                       <span className="text-xs font-black text-gray-500 italic px-1 font-heading">VS</span>
